@@ -87,7 +87,7 @@ function ComprehensiveReports() {
   const handleSearch = async () => {
     try {
       const res = await getInventoryReport(getFilterParams());
-      let data = res.data;
+      let data = Array.isArray(res.data) ? res.data : [];
       
       // Apply report type filter
       if (reportType === 'expired') {
@@ -106,7 +106,8 @@ function ComprehensiveReports() {
       
       setReportData(data);
     } catch (err) {
-      console.error(err);
+      console.error('Error in handleSearch:', err);
+      setReportData([]);
     }
   };
 
