@@ -11,10 +11,10 @@ ENV/
 dist/
 build/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
+# Database - Allow empty initial database
+# *.db
+# *.sqlite
+# *.sqlite3
 db_backup/
 
 # Node
