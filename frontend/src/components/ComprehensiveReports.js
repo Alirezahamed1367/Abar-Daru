@@ -31,6 +31,8 @@ function ComprehensiveReports() {
   const [drugs, setDrugs] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   // Filters
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
@@ -45,18 +47,31 @@ function ComprehensiveReports() {
 
   const loadData = async () => {
     try {
-      const [whRes, drugRes, invRes, transRes] = await Promise.all([
-        getWarehouses(),
-        getDrugs(),
-        getInventoryReport({}),
-        getTransfers()
-      ]);
-      setWarehouses(whRes.data);
-      setDrugs(drugRes.data);
-      setReportData(invRes.data);
-      setTransfers(transRes.data);
+      setLoading(true);
+      setError(null);
+      
+      const whRes = await getWarehouses();
+      setWarehouses(whRes.data || []);
+      
+      const drugRes = await getDrugs();
+      setDrugs(drugRes.data || []);
+      
+      const invRes = await getInventoryReport({});
+      setReportData(invRes.data || []);
+      
+      try {
+        const transRes = await getTransfers();
+        setTransfers(transRes.data || []);
+      } catch (transErr) {
+        console.warn('Could not load transfers:', transErr);
+        setTransfers([]);
+      }
+      
+      setLoading(false);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading data:', err);
+      setError(err.message || 'خطا در بارگذاری اطلاعات');
+      setLoading(false);
     }
   };
 
@@ -260,6 +275,26 @@ function ComprehensiveReports() {
     { value: 'expiring-soon', label: 'نزدیک به انقضا', icon: <WarningIcon /> },
     { value: 'low-stock', label: 'موجودی کم', icon: <TrendingUpIcon /> },
   ];
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <Typography variant="h6" color="primary">در حال بارگذاری...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Paper elevation={3} sx={{ p: 3, bgcolor: '#ffebee' }}>
+          <Typography variant="h6" color="error" gutterBottom>خطا در بارگذاری اطلاعات</Typography>
+          <Typography variant="body2">{error}</Typography>
+          <Button variant="contained" onClick={loadData} sx={{ mt: 2 }}>تلاش مجدد</Button>
+        </Paper>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, bgcolor: '#f5f5f5', minHeight: '100vh' }}>

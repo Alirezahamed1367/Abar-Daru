@@ -91,9 +91,8 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       icon: <AssessmentIcon />,
       color: '#d32f2f',
       submenu: [
-        { title: 'گزارش موجودی', icon: <InventoryIcon />, path: '/report-inventory' },
-        { title: 'داروهای منقضی شده', icon: <ReceiptIcon />, path: '/report-expired' },
-        { title: 'خروجی PDF/Excel', icon: <AssessmentIcon />, path: '/report' }
+        { title: 'گزارشات جامع', icon: <AssessmentIcon />, path: '/report' },
+        { title: 'داروهای منقضی شده', icon: <ReceiptIcon />, path: '/report-expired' }
       ]
     },
     {
