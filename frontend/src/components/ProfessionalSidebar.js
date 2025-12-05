@@ -265,6 +265,27 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
           )}
         </ListItemButton>
       </List>
+
+      {/* Footer - Developer Info */}
+      {!collapsed && (
+        <Box sx={{ 
+          mt: 'auto', 
+          p: 2, 
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          textAlign: 'center'
+        }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+            طراح و توسعه‌دهنده
+          </Typography>
+          <Typography variant="body2" fontWeight="bold" color="primary.main">
+            علیرضا حامد
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            پاییز ۱۴۰۴
+          </Typography>
+        </Box>
+      )}
     </>
   );
 
