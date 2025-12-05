@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-multipart
+passlib
+python-jose
+openpyxl
+reportlab
+Pillow
+aiofiles
+arabic-reshaper
+python-bidi
+jdatetime
