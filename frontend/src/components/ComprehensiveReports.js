@@ -133,11 +133,12 @@ function ComprehensiveReports() {
     link.remove();
   };
 
-  // Statistics
-  const totalItems = reportData.reduce((sum, item) => sum + item.quantity, 0);
-  const uniqueDrugs = new Set(reportData.map(item => item.drug_id)).size;
-  const expiredItems = reportData.filter(item => getDaysUntilExpiration(item.expire_date) < 0).length;
-  const expiringSoon = reportData.filter(item => {
+  // Statistics - safe calculation with default empty array
+  const safeReportData = Array.isArray(reportData) ? reportData : [];
+  const totalItems = safeReportData.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const uniqueDrugs = new Set(safeReportData.map(item => item.drug_id)).size;
+  const expiredItems = safeReportData.filter(item => getDaysUntilExpiration(item.expire_date) < 0).length;
+  const expiringSoon = safeReportData.filter(item => {
     const days = getDaysUntilExpiration(item.expire_date);
     return days >= 0 && days < 90;
   }).length;
@@ -448,7 +449,7 @@ function ComprehensiveReports() {
           </Grid>
 
           <DataGrid
-            rows={reportData}
+            rows={safeReportData}
             columns={inventoryColumns}
             autoHeight
             pageSize={10}
@@ -498,7 +499,7 @@ function ComprehensiveReports() {
                   <Stack spacing={2}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography>تعداد کل اقلام:</Typography>
-                      <Chip label={reportData.length} color="primary" />
+                      <Chip label={safeReportData.length} color="primary" />
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography>مجموع موجودی:</Typography>
@@ -536,7 +537,7 @@ function ComprehensiveReports() {
                     </Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                       <Typography>موجودی کم (کمتر از 50):</Typography>
-                      <Chip label={reportData.filter(i => i.quantity < 50).length} color="warning" />
+                      <Chip label={safeReportData.filter(i => i.quantity < 50).length} color="warning" />
                     </Box>
                   </Stack>
                 </CardContent>
