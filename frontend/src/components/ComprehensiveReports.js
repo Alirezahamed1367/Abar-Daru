@@ -135,6 +135,7 @@ function ComprehensiveReports() {
 
   // Statistics - safe calculation with default empty array
   const safeReportData = Array.isArray(reportData) ? reportData : [];
+  const safeTransfers = Array.isArray(transfers) ? transfers : [];
   const totalItems = safeReportData.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const uniqueDrugs = new Set(safeReportData.map(item => item.drug_id)).size;
   const expiredItems = safeReportData.filter(item => getDaysUntilExpiration(item.expire_date) < 0).length;
@@ -470,7 +471,7 @@ function ComprehensiveReports() {
             گزارش حواله‌های انبار
           </Typography>
           <DataGrid
-            rows={transfers}
+            rows={safeTransfers}
             columns={transferColumns}
             autoHeight
             pageSize={10}
@@ -556,7 +557,7 @@ function ComprehensiveReports() {
                     <Grid item xs={6} md={3}>
                       <Box textAlign="center">
                         <Typography variant="h4" color="warning.main">
-                          {transfers.filter(t => t.status === 'pending').length}
+                          {safeTransfers.filter(t => t.status === 'pending').length}
                         </Typography>
                         <Typography variant="body2">در انتظار تایید</Typography>
                       </Box>
@@ -564,7 +565,7 @@ function ComprehensiveReports() {
                     <Grid item xs={6} md={3}>
                       <Box textAlign="center">
                         <Typography variant="h4" color="success.main">
-                          {transfers.filter(t => t.status === 'confirmed').length}
+                          {safeTransfers.filter(t => t.status === 'confirmed').length}
                         </Typography>
                         <Typography variant="body2">تایید شده</Typography>
                       </Box>
@@ -572,7 +573,7 @@ function ComprehensiveReports() {
                     <Grid item xs={6} md={3}>
                       <Box textAlign="center">
                         <Typography variant="h4" color="error.main">
-                          {transfers.filter(t => t.status === 'rejected').length}
+                          {safeTransfers.filter(t => t.status === 'rejected').length}
                         </Typography>
                         <Typography variant="body2">رد شده</Typography>
                       </Box>
@@ -580,7 +581,7 @@ function ComprehensiveReports() {
                     <Grid item xs={6} md={3}>
                       <Box textAlign="center">
                         <Typography variant="h4" color="info.main">
-                          {transfers.filter(t => t.status === 'mismatch').length}
+                          {safeTransfers.filter(t => t.status === 'mismatch').length}
                         </Typography>
                         <Typography variant="body2">عدم تطابق</Typography>
                       </Box>
