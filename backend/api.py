@@ -74,8 +74,12 @@ def get_db():
     finally:
         db.close()
 
-def log_operation(db: Session, action: str, details: str, user_id: int = None):
+def log_operation(db: Session, action: str, details: str, user_id: int = None, current_user: User = None):
     try:
+        # If current_user provided, use their ID
+        if current_user and not user_id:
+            user_id = current_user.id
+        
         log = OperationLog(
             user_id=user_id,
             action=action,
@@ -135,7 +139,7 @@ def add_warehouse(data: dict, db: Session = Depends(get_db)):
     db.add(warehouse)
     db.commit()
     db.refresh(warehouse)
-    log_operation(db, "Add Warehouse", f"Added warehouse: {warehouse.name}")
+    log_operation(db, "Add Warehouse", f"افزودن انبار: {warehouse.name}")
     return warehouse
 
 @router.put('/warehouses/{warehouse_id}')
@@ -146,7 +150,7 @@ def update_warehouse(warehouse_id: int, data: dict, db: Session = Depends(get_db
     for key, value in data.items():
         setattr(warehouse, key, value)
     db.commit()
-    log_operation(db, "Update Warehouse", f"Updated warehouse: {warehouse.name}")
+    log_operation(db, "Update Warehouse", f"ویرایش انبار: {warehouse.name}")
     return warehouse
 
 @router.delete('/warehouses/{warehouse_id}')
@@ -157,7 +161,7 @@ def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db)):
     name = warehouse.name
     db.delete(warehouse)
     db.commit()
-    log_operation(db, "Delete Warehouse", f"Deleted warehouse: {name}")
+    log_operation(db, "Delete Warehouse", f"حذف انبار: {name}")
     return {"message": "انبار حذف شد"}
 
 @router.get('/drugs')
@@ -196,7 +200,7 @@ def add_drug(data: DrugCreate, db: Session = Depends(get_db)):
     db.add(drug)
     db.commit()
     db.refresh(drug)
-    log_operation(db, "Add Drug", f"Added drug: {drug.name}")
+    log_operation(db, "Add Drug", f"افزودن دارو: {drug.name}")
     # Return drug object - FastAPI will serialize it using DrugResponse model
     return drug
 
@@ -210,7 +214,7 @@ def update_drug(drug_id: int, data: DrugUpdate, db: Session = Depends(get_db)):
         setattr(drug, key, value)
     db.commit()
     db.refresh(drug)
-    log_operation(db, "Update Drug", f"Updated drug: {drug.name}")
+    log_operation(db, "Update Drug", f"ویرایش دارو: {drug.name}")
     return drug
     return JSONResponse(content=jsonable_encoder(drug))
 
@@ -222,7 +226,7 @@ def delete_drug(drug_id: int, db: Session = Depends(get_db)):
     name = drug.name
     db.delete(drug)
     db.commit()
-    log_operation(db, "Delete Drug", f"Deleted drug: {name}")
+    log_operation(db, "Delete Drug", f"حذف دارو: {name}")
     return {"message": "دارو حذف شد"}
 
 @router.get('/suppliers')
@@ -327,8 +331,8 @@ def add_inventory(data: dict, db: Session = Depends(get_db)):
         db.refresh(existing)
         
         drug = db.query(Drug).filter(Drug.id == existing.drug_id).first()
-        drug_name = drug.name if drug else "Unknown Drug"
-        log_operation(db, "Update Inventory (Duplicate)", f"Added {data.get('quantity', 0)} to existing {drug_name} (expire: {data.get('expire_date')})")
+        drug_name = drug.name if drug else "دارو نامشخص"
+        log_operation(db, "Update Inventory (Duplicate)", f"افزایش {data.get('quantity', 0)} عدد به موجودی {drug_name} (انقضا: {data.get('expire_date')})")
         
         return existing
     
@@ -340,8 +344,8 @@ def add_inventory(data: dict, db: Session = Depends(get_db)):
     
     # Get drug name for log
     drug = db.query(Drug).filter(Drug.id == inventory.drug_id).first()
-    drug_name = drug.name if drug else "Unknown Drug"
-    log_operation(db, "Add Inventory", f"Added {inventory.quantity} of {drug_name}")
+    drug_name = drug.name if drug else "دارو نامشخص"
+    log_operation(db, "Add Inventory", f"رسید {inventory.quantity} عدد از {drug_name}")
     
     return inventory
 
@@ -356,7 +360,7 @@ def update_inventory(inventory_id: int, data: dict, db: Session = Depends(get_db
     
     db.commit()
     db.refresh(inventory)
-    log_operation(db, "Update Inventory", f"Updated inventory ID: {inventory_id}")
+    log_operation(db, "Update Inventory", f"ویرایش موجودی شماره: {inventory_id}")
     return inventory
 
 @router.delete('/inventory/{inventory_id}')
@@ -367,12 +371,58 @@ def delete_inventory(inventory_id: int, db: Session = Depends(get_db)):
     
     db.delete(inventory)
     db.commit()
-    log_operation(db, "Delete Inventory", f"Deleted inventory ID: {inventory_id}")
+    log_operation(db, "Delete Inventory", f"حذف موجودی شماره: {inventory_id}")
     return {"message": "رسید حذف شد"}
 
 @router.get('/logs')
 def get_logs(db: Session = Depends(get_db)):
-    return db.query(OperationLog).all()
+    # Action translations to Persian
+    action_translations = {
+        "Add Warehouse": "افزودن انبار",
+        "Update Warehouse": "ویرایش انبار",
+        "Delete Warehouse": "حذف انبار",
+        "Add Drug": "افزودن دارو",
+        "Update Drug": "ویرایش دارو",
+        "Delete Drug": "حذف دارو",
+        "Add Inventory": "رسید انبار",
+        "Update Inventory": "ویرایش موجودی",
+        "Update Inventory (Duplicate)": "افزایش موجودی",
+        "Delete Inventory": "حذف موجودی",
+        "Upload Drug Image": "آپلود تصویر دارو",
+        "Create Transfer": "ایجاد حواله",
+        "Confirm Transfer": "تایید حواله",
+        "Reject Transfer": "رد حواله",
+        "Delete Transfer": "حذف حواله",
+        "Resolve Mismatch": "رفع مغایرت",
+        "Add Supplier": "افزودن تامین‌کننده",
+        "Update Supplier": "ویرایش تامین‌کننده",
+        "Delete Supplier": "حذف تامین‌کننده",
+        "Add Consumer": "افزودن مصرف‌کننده",
+        "Update Consumer": "ویرایش مصرف‌کننده",
+        "Delete Consumer": "حذف مصرف‌کننده"
+    }
+    
+    logs = db.query(OperationLog).order_by(OperationLog.id.desc()).all()
+    
+    # Translate actions
+    result = []
+    for log in logs:
+        log_dict = {
+            "id": log.id,
+            "user_id": log.user_id,
+            "action": action_translations.get(log.action, log.action),
+            "action_en": log.action,  # Keep original for reference
+            "details": log.details,
+            "timestamp": log.timestamp,
+            "user": {
+                "id": log.user.id,
+                "username": log.user.username,
+                "full_name": log.user.full_name
+            } if log.user else None
+        }
+        result.append(log_dict)
+    
+    return result
 
 # Drug image upload & compression
 @router.post('/upload-drug-image')
@@ -427,7 +477,7 @@ def upload_drug_image(drug_id: int, file: UploadFile = File(...), db: Session = 
     drug.image = save_path
     
     db.commit()
-    log_operation(db, "Upload Drug Image", f"Uploaded image for drug: {drug.name}")
+    log_operation(db, "Upload Drug Image", f"آپلود تصویر دارو: {drug.name}")
     return {"image": save_path, "size": len(img_bytes)}
 
 # Get drug image with fallback to database
@@ -553,7 +603,7 @@ def create_transfer(
     db.commit()
     db.refresh(transfer)
     
-    log_operation(db, "Create Transfer", f"Transfer {quantity} of drug {drug_id} from warehouse {source_warehouse_id} to transit")
+    log_operation(db, "Create Transfer", f"حواله {quantity} عدد دارو {drug_id} از انبار {source_warehouse_id} به کالای در راه")
     return transfer
 
 @router.post('/transfer/{transfer_id}/confirm')
@@ -627,7 +677,7 @@ def confirm_transfer(transfer_id: int, quantity_received: int, db: Session = Dep
         # Mismatch: difference remains in TRANSIT for admin to resolve
     
     db.commit()
-    log_operation(db, "Confirm Transfer", f"Transfer {transfer_id}: received {quantity_received} of {transfer.quantity_sent} sent")
+    log_operation(db, "Confirm Transfer", f"حواله {transfer_id}: دریافت {quantity_received} عدد از {transfer.quantity_sent} عدد ارسالی")
     return transfer
 
 @router.get('/transfer/pending')
@@ -704,7 +754,7 @@ def confirm_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
     transfer.confirmed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.commit()
     
-    log_operation(db, "Confirm Transfer", f"Transfer ID {transfer_id} confirmed")
+    log_operation(db, "Confirm Transfer", f"تایید حواله شماره {transfer_id}")
     return transfer
 
 @router.put('/transfer/{transfer_id}/reject')
@@ -757,7 +807,7 @@ def reject_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
     transfer.confirmed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.commit()
     
-    log_operation(db, "Reject Transfer", f"Transfer ID {transfer_id} rejected")
+    log_operation(db, "Reject Transfer", f"رد حواله شماره {transfer_id}")
     return transfer
 
 @router.delete('/transfer/{transfer_id}')
@@ -809,7 +859,7 @@ def delete_transfer(transfer_id: int, db: Session = Depends(get_db)):
     db.delete(transfer)
     db.commit()
     
-    log_operation(db, "Delete Transfer", f"Transfer ID {transfer_id} deleted")
+    log_operation(db, "Delete Transfer", f"حذف حواله شماره {transfer_id}")
     return {"message": "حواله حذف شد"}
 
 # Mismatch management endpoints
@@ -1201,6 +1251,10 @@ def update_user(user_id: int, data: dict, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
+    
+    # Prevent editing superadmin
+    if user.username == 'superadmin':
+        raise HTTPException(status_code=400, detail="امکان ویرایش مدیر کل وجود ندارد")
     
     if 'password' in data and data['password']:
         user.password = pwd_context.hash(data['password'])
