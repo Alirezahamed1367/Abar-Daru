@@ -13,6 +13,7 @@ import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { DataGrid } from '@mui/x-data-grid';
 import { exportExcel, exportPDF, getWarehouses, getDrugs, getInventoryReport, getTransfers } from '../utils/api';
 import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationUtils';
@@ -159,8 +160,10 @@ function ComprehensiveReports() {
       minWidth: 150,
       resizable: true,
       valueGetter: (params) => {
-        const wh = warehouses.find(w => w.id === params.row.warehouse_id);
-        return wh ? wh.name : '-';
+        if (!params.row.warehouse_id) return '-';
+        const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
+        const wh = safeWarehouses.find(w => w.id === params.row.warehouse_id);
+        return wh ? wh.name : `انبار ${params.row.warehouse_id}`;
       }
     },
     { 
@@ -170,8 +173,10 @@ function ComprehensiveReports() {
       minWidth: 150,
       resizable: true,
       valueGetter: (params) => {
-        const d = drugs.find(d => d.id === params.row.drug_id);
-        return d ? d.name : '-';
+        if (!params.row.drug_id) return '-';
+        const safeDrugs = Array.isArray(drugs) ? drugs : [];
+        const d = safeDrugs.find(d => d.id === params.row.drug_id);
+        return d ? d.name : `دارو ${params.row.drug_id}`;
       }
     },
     { 
@@ -214,8 +219,10 @@ function ComprehensiveReports() {
       minWidth: 150,
       resizable: true,
       valueGetter: (params) => {
-        const wh = warehouses.find(w => w.id === params.row.from_warehouse_id);
-        return wh ? wh.name : '-';
+        if (!params.row.from_warehouse_id) return '-';
+        const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
+        const wh = safeWarehouses.find(w => w.id === params.row.from_warehouse_id);
+        return wh ? wh.name : `انبار ${params.row.from_warehouse_id}`;
       }
     },
     { 
@@ -225,8 +232,10 @@ function ComprehensiveReports() {
       minWidth: 150,
       resizable: true,
       valueGetter: (params) => {
-        const wh = warehouses.find(w => w.id === params.row.to_warehouse_id);
-        return wh ? wh.name : '-';
+        if (!params.row.to_warehouse_id) return '-';
+        const safeWarehouses = Array.isArray(warehouses) ? warehouses : [];
+        const wh = safeWarehouses.find(w => w.id === params.row.to_warehouse_id);
+        return wh ? wh.name : `انبار ${params.row.to_warehouse_id}`;
       }
     },
     { 
@@ -236,8 +245,10 @@ function ComprehensiveReports() {
       minWidth: 150,
       resizable: true,
       valueGetter: (params) => {
-        const d = drugs.find(d => d.id === params.row.drug_id);
-        return d ? d.name : '-';
+        if (!params.row.drug_id) return '-';
+        const safeDrugs = Array.isArray(drugs) ? drugs : [];
+        const d = safeDrugs.find(d => d.id === params.row.drug_id);
+        return d ? d.name : `دارو ${params.row.drug_id}`;
       }
     },
     { field: 'quantity_sent', headerName: 'تعداد ارسالی', flex: 0.5, minWidth: 100, resizable: true },
@@ -467,9 +478,19 @@ function ComprehensiveReports() {
 
         {/* Tab 2: Transfer Report */}
         <TabPanel value={activeTab} index={1}>
-          <Typography variant="h6" gutterBottom>
-            گزارش حواله‌های انبار
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              گزارش حواله‌های انبار
+            </Typography>
+            <Button 
+              variant="outlined" 
+              startIcon={<RefreshIcon />} 
+              onClick={loadData}
+              size="small"
+            >
+              به‌روزرسانی
+            </Button>
+          </Box>
           <DataGrid
             rows={safeTransfers}
             columns={transferColumns}
@@ -488,6 +509,16 @@ function ComprehensiveReports() {
 
         {/* Tab 3: Analytics */}
         <TabPanel value={activeTab} index={2}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button 
+              variant="outlined" 
+              startIcon={<RefreshIcon />} 
+              onClick={loadData}
+              size="small"
+            >
+              به‌روزرسانی
+            </Button>
+          </Box>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Card>
