@@ -82,22 +82,29 @@ function UserManagement() {
       type: 'actions',
       headerName: 'عملیات',
       width: 100,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<EditIcon color="primary" />}
-          label="ویرایش"
-          onClick={() => {
-            setCurrentUser({ ...params.row, password: '' }); // Don't show password
-            setEditMode(true);
-            setOpenDialog(true);
-          }}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon color="error" />}
-          label="حذف"
-          onClick={() => handleDelete(params.row.id)}
-        />
-      ]
+      getActions: (params) => {
+        const isSuperAdmin = params.row.username === 'superadmin';
+        return [
+          <GridActionsCellItem
+            icon={<EditIcon color={isSuperAdmin ? "disabled" : "primary"} />}
+            label={isSuperAdmin ? "غیرقابل ویرایش" : "ویرایش"}
+            onClick={() => {
+              if (!isSuperAdmin) {
+                setCurrentUser({ ...params.row, password: '' });
+                setEditMode(true);
+                setOpenDialog(true);
+              }
+            }}
+            disabled={isSuperAdmin}
+          />,
+          <GridActionsCellItem
+            icon={<DeleteIcon color={isSuperAdmin ? "disabled" : "error"} />}
+            label={isSuperAdmin ? "غیرقابل حذف" : "حذف"}
+            onClick={() => !isSuperAdmin && handleDelete(params.row.id)}
+            disabled={isSuperAdmin}
+          />
+        ];
+      }
     }
   ];
 
@@ -151,6 +158,8 @@ function UserManagement() {
             margin="normal"
             value={currentUser.password}
             onChange={e => setCurrentUser({ ...currentUser, password: e.target.value })}
+            disabled={editMode && currentUser.username === 'superadmin'}
+            helperText={editMode && currentUser.username === 'superadmin' ? "رمز عبور مدیر کل قابل تغییر نیست" : ""}
           />
           <TextField
             label="نام کامل"
@@ -158,6 +167,7 @@ function UserManagement() {
             margin="normal"
             value={currentUser.full_name}
             onChange={e => setCurrentUser({ ...currentUser, full_name: e.target.value })}
+            disabled={editMode && currentUser.username === 'superadmin'}
           />
           <TextField
             select
@@ -166,6 +176,7 @@ function UserManagement() {
             margin="normal"
             value={currentUser.access_level}
             onChange={e => setCurrentUser({ ...currentUser, access_level: e.target.value })}
+            disabled={editMode && currentUser.username === 'superadmin'}
           >
             <MenuItem value="superadmin">مدیر کل (Super Admin)</MenuItem>
             <MenuItem value="admin">مدیر (Admin)</MenuItem>
