@@ -100,7 +100,7 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       icon: <SettingsIcon />,
       color: '#0288d1',
       submenu: [
-        { title: 'کاربران و دسترسی', icon: <PeopleIcon />, path: '/users', access: 'superadmin' },
+        { title: 'کاربران و دسترسی', icon: <PeopleIcon />, path: '/users', access: 'admin' },
         { title: 'تاریخچه عملیات', icon: <HistoryIcon />, path: '/logs' },
         { title: 'بکاپ دیتابیس', icon: <BackupIcon />, path: '/backup' },
         { title: 'تنظیمات', icon: <SettingsIcon />, path: '/settings' }
@@ -109,10 +109,17 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
   ];
 
   const filterMenuByAccess = (item) => {
-    if (item.access && user?.access_level !== item.access) {
-      return false;
+    if (!item.access) return true; // No restriction
+    
+    // superadmin has access to everything
+    if (user?.access_level === 'superadmin') return true;
+    
+    // Check specific access level
+    if (item.access === 'admin') {
+      return user?.access_level === 'admin' || user?.access_level === 'superadmin';
     }
-    return true;
+    
+    return user?.access_level === item.access;
   };
 
   const drawerContent = (
