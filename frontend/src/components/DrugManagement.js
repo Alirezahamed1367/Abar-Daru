@@ -222,7 +222,12 @@ function DrugManagement() {
   };
 
   const columns = [
-    { field: 'id', headerName: 'شناسه', width: 80 },
+    { 
+      field: 'rowNumber', 
+      headerName: 'ردیف', 
+      width: 80,
+      valueGetter: (params) => params.api.getAllRowIds().indexOf(params.id) + 1
+    },
     {
       field: 'name',
       headerName: 'نام دارو',
@@ -355,8 +360,12 @@ function DrugManagement() {
           columns={columns}
           loading={loading}
           autoHeight
-          pageSize={10}
-          rowsPerPageOptions={[10, 25, 50]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 25 }
+            }
+          }}
+          pageSizeOptions={[25, 50, 100, 150, 200, 250, 300]}
           disableSelectionOnClick
           sx={{
             direction: 'rtl',
