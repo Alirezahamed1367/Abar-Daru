@@ -360,12 +360,14 @@ function DrugManagement() {
           columns={columns}
           loading={loading}
           autoHeight
+          pagination
           initialState={{
             pagination: {
-              paginationModel: { pageSize: 25 }
+              paginationModel: { pageSize: 25, page: 0 }
             }
           }}
           pageSizeOptions={[25, 50, 100, 150, 200, 250, 300]}
+          paginationMode="client"
           disableSelectionOnClick
           sx={{
             direction: 'rtl',
