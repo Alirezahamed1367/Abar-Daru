@@ -43,11 +43,17 @@ function UserManagement() {
 
   const handleSave = async () => {
     try {
+      // Convert username to lowercase for case-insensitive storage
+      const userData = {
+        ...currentUser,
+        username: currentUser.username.toLowerCase().trim()
+      };
+      
       if (editMode) {
-        await updateUser(currentUser.id, currentUser);
+        await updateUser(userData.id, userData);
         showSnackbar('کاربر با موفقیت ویرایش شد', 'success');
       } else {
-        await addUser(currentUser);
+        await addUser(userData);
         showSnackbar('کاربر با موفقیت ایجاد شد', 'success');
       }
       setOpenDialog(false);

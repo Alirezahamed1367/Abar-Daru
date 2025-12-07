@@ -93,11 +93,15 @@ function ComprehensiveReports() {
       // Apply report type filter
       if (reportType === 'expired') {
         data = data.filter(item => {
+          // Only show drugs that have expiry date (has_expiry_date = true)
+          if (item.has_expiry_date !== true) return false;
           const days = getDaysUntilExpiration(item.expire_date);
           return days < 0;
         });
       } else if (reportType === 'expiring-soon') {
         data = data.filter(item => {
+          // Only show drugs that have expiry date (has_expiry_date = true)
+          if (item.has_expiry_date !== true) return false;
           const days = getDaysUntilExpiration(item.expire_date);
           return days >= 0 && days < 90;
         });
@@ -139,8 +143,10 @@ function ComprehensiveReports() {
   const safeTransfers = Array.isArray(transfers) ? transfers : [];
   const totalItems = safeReportData.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const uniqueDrugs = new Set(safeReportData.map(item => item.drug_id)).size;
-  const expiredItems = safeReportData.filter(item => getDaysUntilExpiration(item.expire_date) < 0).length;
+  // Only count items with expiry dates for expiry-related statistics
+  const expiredItems = safeReportData.filter(item => item.has_expiry_date === true && getDaysUntilExpiration(item.expire_date) < 0).length;
   const expiringSoon = safeReportData.filter(item => {
+    if (item.has_expiry_date !== true) return false;
     const days = getDaysUntilExpiration(item.expire_date);
     return days >= 0 && days < 90;
   }).length;

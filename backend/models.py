@@ -71,6 +71,7 @@ class Drug(Base):
     image = Column(String)  # Path to cached file (images/drug_X.jpg)
     image_data = Column(Text)  # Base64 encoded image data for backup
     description = Column(Text)
+    has_expiry_date = Column(Boolean, default=True)  # True: requires expiry date, False: no expiry needed
 
 class Inventory(Base):
     __tablename__ = 'inventory'

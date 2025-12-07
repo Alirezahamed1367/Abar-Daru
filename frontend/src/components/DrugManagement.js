@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, IconButton, Alert, Snackbar, Chip, Avatar, Tooltip, InputAdornment
+  TextField, IconButton, Alert, Snackbar, Chip, Avatar, Tooltip, InputAdornment,
+  FormControlLabel, Checkbox
 } from '@mui/material';
 import { DataGrid, GridActionsCellItem, GridToolbarQuickFilter } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,7 +22,7 @@ function DrugManagement() {
   const [openDialog, setOpenDialog] = useState(false);
   const [openDetailDialog, setOpenDetailDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [currentDrug, setCurrentDrug] = useState({ name: '', dose: '', package_type: '', description: '', image: '' });
+  const [currentDrug, setCurrentDrug] = useState({ name: '', dose: '', package_type: '', description: '', image: '', has_expiry_date: true });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [openImageDialog, setOpenImageDialog] = useState(false);
@@ -80,7 +81,8 @@ function DrugManagement() {
         name: currentDrug.name,
         dose: currentDrug.dose,
         package_type: currentDrug.package_type,
-        description: currentDrug.description
+        description: currentDrug.description,
+        has_expiry_date: currentDrug.has_expiry_date !== false
       };
       let res;
       if (editMode) {
@@ -366,8 +368,10 @@ function DrugManagement() {
               paginationModel: { pageSize: 25, page: 0 }
             }
           }}
-          pageSizeOptions={[25, 50, 100, 150, 200, 250, 300]}
+          pageSizeOptions={[25, 50, 100]}
           paginationMode="client"
+          rowCount={filteredDrugs.length}
+          getRowId={(row) => row.id}
           disableSelectionOnClick
           sx={{
             direction: 'rtl',
@@ -427,6 +431,22 @@ function DrugManagement() {
             inputProps={{ style: { textAlign: 'right' } }}
           />
           <Box sx={{ mt: 2, textAlign: 'right' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={currentDrug.has_expiry_date !== false}
+                  onChange={e => setCurrentDrug({ ...currentDrug, has_expiry_date: e.target.checked })}
+                  color="primary"
+                />
+              }
+              label="کالای دارای تاریخ انقضا"
+              sx={{ direction: 'rtl' }}
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mr: 4, mb: 1 }}>
+              در صورت تیک زدن این گزینه، هنگام رسید انبار باید تاریخ انقضا وارد شود
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2, textAlign: 'right' }}>
             <Typography variant="body2" sx={{ mb: 1 }}>تصویر دارو:</Typography>
             <Button variant="outlined" component="label" sx={{ mr: 2 }}>
               انتخاب تصویر
@@ -464,7 +484,20 @@ function DrugManagement() {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>نوع بسته‌بندی:</Typography>
                 <Typography variant="body1" gutterBottom>{selectedDrug.package_type || '-'}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>توضیحات:</Typography>
-                <Typography variant="body1">{selectedDrug.description || '-'}</Typography>
+                <Typography variant="body1" gutterBottom>{selectedDrug.description || '-'}</Typography>
+                
+                <Box sx={{ mt: 3, p: 2, bgcolor: selectedDrug.has_expiry_date !== false ? '#e3f2fd' : '#fff3e0', borderRadius: 2 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>وضعیت تاریخ انقضا:</Typography>
+                  {selectedDrug.has_expiry_date !== false ? (
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="body1" color="primary.main" fontWeight="bold">✅ دارای تاریخ انقضا</Typography>
+                    </Box>
+                  ) : (
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Typography variant="body1" color="warning.main" fontWeight="bold">⚠️ کالای بدون تاریخ انقضا</Typography>
+                    </Box>
+                  )}
+                </Box>
               </Box>
             </Box>
           )}

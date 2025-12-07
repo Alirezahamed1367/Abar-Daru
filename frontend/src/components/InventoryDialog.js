@@ -8,7 +8,8 @@ import {
   TextField,
   MenuItem,
   Grid,
-  Alert
+  Alert,
+  Autocomplete
 } from '@mui/material';
 import moment from 'jalali-moment';
 
@@ -42,8 +43,19 @@ function InventoryDialog({ open, onClose, warehouses, drugs, suppliers, onSubmit
   }, [editData, open]);
 
   const handleSubmit = () => {
-    if (!warehouseId || !drugId || !supplierId || !quantity || !expire || !entryDate) {
+    // Get selected drug to check if it requires expiry date
+    const selectedDrug = drugs.find(d => d.id === drugId);
+    const requiresExpiry = selectedDrug?.has_expiry_date === true;
+    
+    // Validate fields
+    if (!warehouseId || !drugId || !supplierId || !quantity || !entryDate) {
       setError('لطفا تمام فیلدها را پر کنید');
+      return;
+    }
+    
+    // Check expiry date only if drug requires it
+    if (requiresExpiry && !expire) {
+      setError('تاریخ انقضا برای این دارو الزامی است');
       return;
     }
     
@@ -52,7 +64,7 @@ function InventoryDialog({ open, onClose, warehouses, drugs, suppliers, onSubmit
       drug_id: drugId,
       supplier_id: supplierId,
       quantity: parseInt(quantity),
-      expire_date: expire,
+      expire_date: expire || null,
       entry_date: entryDate,
     };
     
@@ -84,18 +96,32 @@ function InventoryDialog({ open, onClose, warehouses, drugs, suppliers, onSubmit
           </Grid>
           
           <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="نام دارو"
-              fullWidth
-              value={drugId}
-              onChange={e => setDrugId(e.target.value)}
+            <Autocomplete
+              options={drugs}
+              getOptionLabel={(option) => option.name || ''}
+              value={drugs.find(d => d.id === drugId) || null}
+              onChange={(event, newValue) => {
+                setDrugId(newValue ? newValue.id : '');
+              }}
               disabled={!!editData}
-            >
-              {drugs.map((drug) => (
-                <MenuItem key={drug.id} value={drug.id}>{drug.name}</MenuItem>
-              ))}
-            </TextField>
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              filterOptions={(options, { inputValue }) => {
+                if (!inputValue) return options;
+                const searchTerm = inputValue.toLowerCase();
+                return options.filter(option =>
+                  option.name.toLowerCase().includes(searchTerm)
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="نام دارو"
+                  placeholder="حداقل 3 حرف وارد کنید..."
+                  helperText="جستجو در هر قسمت از نام دارو"
+                />
+              )}
+              noOptionsText="دارویی یافت نشد"
+            />
           </Grid>
           
           <Grid item xs={12} md={6}>
@@ -133,14 +159,27 @@ function InventoryDialog({ open, onClose, warehouses, drugs, suppliers, onSubmit
           </Grid>
           
           <Grid item xs={12} md={6}>
-            <TextField 
-              label="تاریخ انقضا (YYYY-MM)" 
-              placeholder="2026-08"
-              fullWidth
-              value={expire} 
-              onChange={e => setExpire(e.target.value)}
-              disabled={!!editData}
-            />
+            {(() => {
+              const selectedDrug = drugs.find(d => d.id === drugId);
+              const requiresExpiry = selectedDrug?.has_expiry_date === true;
+              
+              return (
+                <TextField 
+                  label={requiresExpiry ? "تاریخ انقضا (YYYY-MM) *" : "تاریخ انقضا (YYYY-MM) - اختیاری"}
+                  placeholder="2026-08"
+                  fullWidth
+                  value={expire} 
+                  onChange={e => setExpire(e.target.value)}
+                  disabled={!!editData || !requiresExpiry}
+                  helperText={!requiresExpiry ? "این کالا نیازی به تاریخ انقضا ندارد" : ""}
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      backgroundColor: !requiresExpiry ? '#f5f5f5' : 'inherit'
+                    }
+                  }}
+                />
+              );
+            })()}
           </Grid>
         </Grid>
       </DialogContent>

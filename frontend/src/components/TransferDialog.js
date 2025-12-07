@@ -13,7 +13,8 @@ import {
   FormLabel,
   RadioGroup,
   FormControlLabel,
-  Radio
+  Radio,
+  Autocomplete
 } from '@mui/material';
 import moment from 'jalali-moment';
 
@@ -181,23 +182,36 @@ function TransferDialog({
           </Grid>
 
           <Grid item xs={12} md={8}>
-            <TextField
-              select
-              label="انتخاب دارو (از موجودی)"
-              value={selectedInventoryId}
-              onChange={(e) => setSelectedInventoryId(e.target.value)}
-              fullWidth
+            <Autocomplete
+              options={availableInventory}
+              getOptionLabel={(option) => {
+                const drug = drugs.find(d => d.id === option.drug_id);
+                return drug ? `${drug.name} - انقضا: ${option.expire_date} - موجودی: ${option.quantity}` : 'Unknown';
+              }}
+              value={availableInventory.find(inv => inv.id === parseInt(selectedInventoryId)) || null}
+              onChange={(event, newValue) => {
+                setSelectedInventoryId(newValue ? newValue.id : '');
+              }}
               disabled={!sourceWarehouse || !!editData}
-            >
-              {availableInventory.map((inv) => {
-                const drug = drugs.find(d => d.id === inv.drug_id);
-                return (
-                  <MenuItem key={inv.id} value={inv.id}>
-                    {drug ? drug.name : 'Unknown'} - انقضا: {inv.expire_date} - موجودی: {inv.quantity}
-                  </MenuItem>
-                );
-              })}
-            </TextField>
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              filterOptions={(options, { inputValue }) => {
+                if (!inputValue) return options;
+                const searchTerm = inputValue.toLowerCase();
+                return options.filter(option => {
+                  const drug = drugs.find(d => d.id === option.drug_id);
+                  return drug && drug.name.toLowerCase().includes(searchTerm);
+                });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="انتخاب دارو (از موجودی)"
+                  placeholder="حداقل 3 حرف وارد کنید..."
+                  helperText="جستجو در هر قسمت از نام دارو"
+                />
+              )}
+              noOptionsText="دارویی در موجودی یافت نشد"
+            />
           </Grid>
 
           <Grid item xs={12} md={4}>

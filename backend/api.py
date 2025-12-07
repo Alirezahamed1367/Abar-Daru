@@ -94,7 +94,9 @@ def log_operation(db: Session, action: str, details: str, user_id: int = None, c
 # User registration/login/password recovery
 @router.post('/login')
 def login_user(username: str, password: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
+    # Convert username to lowercase for case-insensitive login
+    username_lower = username.lower()
+    user = db.query(User).filter(User.username == username_lower).first()
     if not user or not pwd_context.verify(password, user.password):
         raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است")
     
@@ -114,7 +116,9 @@ def login_user(username: str, password: str, db: Session = Depends(get_db)):
 
 @router.post('/recover-password')
 def recover_password(username: str, new_password: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
+    # Convert username to lowercase for case-insensitive recovery
+    username_lower = username.lower()
+    user = db.query(User).filter(User.username == username_lower).first()
     if not user:
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
     user.password = pwd_context.hash(new_password)
@@ -174,6 +178,7 @@ class DrugCreate(BaseModel):
     dose: Optional[str] = None
     package_type: Optional[str] = None
     description: Optional[str] = None
+    has_expiry_date: Optional[bool] = True
 
 class DrugResponse(BaseModel):
     id: int
@@ -183,6 +188,7 @@ class DrugResponse(BaseModel):
     description: Optional[str] = None
     image: Optional[str] = None
     image_data: Optional[str] = None
+    has_expiry_date: Optional[bool] = True
     
     class Config:
         from_attributes = True  # For Pydantic v2 (was orm_mode in v1)
@@ -192,6 +198,7 @@ class DrugUpdate(BaseModel):
     dose: Optional[str] = None
     package_type: Optional[str] = None
     description: Optional[str] = None
+    has_expiry_date: Optional[bool] = None
 
 
 @router.post('/drugs', response_model=DrugResponse)
@@ -530,9 +537,36 @@ def backup_db():
 # Expiring drugs dashboard
 @router.get('/expiring-drugs')
 def expiring_drugs(db: Session = Depends(get_db)):
-    # Example: drugs expiring in next 3 months
-    # ...
-    return []
+    from datetime import datetime, timedelta
+    
+    # Get expiry warning days from settings (default 90 days)
+    warning_days_setting = db.query(SystemSettings).filter(SystemSettings.key == 'exp_warning_days').first()
+    warning_days = int(warning_days_setting.value) if warning_days_setting else 90
+    
+    # Calculate cutoff date
+    cutoff_date = datetime.now() + timedelta(days=warning_days)
+    cutoff_str = cutoff_date.strftime('%Y-%m')
+    
+    # Query inventory with expiring drugs, JOIN with drugs to filter has_expiry_date
+    results = db.query(Inventory).join(Drug).filter(
+        Drug.has_expiry_date == True,  # Only drugs that have expiry dates
+        Inventory.expire_date.isnot(None),
+        Inventory.expire_date <= cutoff_str,
+        Inventory.quantity > 0
+    ).all()
+    
+    output = []
+    for inv in results:
+        drug = db.query(Drug).filter(Drug.id == inv.drug_id).first()
+        wh = db.query(Warehouse).filter(Warehouse.id == inv.warehouse_id).first()
+        output.append({
+            'name': drug.name if drug else 'نامشخص',
+            'warehouse': wh.name if wh else 'نامشخص',
+            'quantity': inv.quantity,
+            'expire': inv.expire_date
+        })
+    
+    return output
 
 # Transfer/Havaleh endpoints
 @router.post('/transfer/create')
@@ -994,7 +1028,20 @@ def get_inventory_report(
     if expire_date_to:
         query = query.filter(Inventory.expire_date <= expire_date_to)
     
-    return query.all()
+    # Return inventory with drug info for has_expiry_date filtering in frontend
+    results = []
+    for inv in query.all():
+        results.append({
+            'id': inv.id,
+            'warehouse_id': inv.warehouse_id,
+            'drug_id': inv.drug_id,
+            'expire_date': inv.expire_date,
+            'quantity': inv.quantity,
+            'supplier_id': inv.supplier_id,
+            'entry_date': inv.entry_date,
+            'has_expiry_date': inv.drug.has_expiry_date if inv.drug else True  # Include drug's expiry flag
+        })
+    return results
 
 @router.get('/export-excel')
 def export_excel(
@@ -1227,11 +1274,14 @@ def get_users(db: Session = Depends(get_db)):
 
 @router.post('/users')
 def add_user(data: dict, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == data['username']).first():
+    # Convert username to lowercase for case-insensitive storage
+    username_lower = data['username'].lower()
+    
+    if db.query(User).filter(User.username == username_lower).first():
         raise HTTPException(status_code=400, detail="نام کاربری تکراری است")
     
     user = User(
-        username=data['username'],
+        username=username_lower,
         password=pwd_context.hash(data['password']),
         full_name=data.get('full_name'),
         access_level=data.get('access_level', 'viewer')

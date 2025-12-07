@@ -248,8 +248,16 @@ function SupplierManagement() {
             rows={suppliers}
             columns={columns}
             loading={loading}
-            pageSize={10}
-            rowsPerPageOptions={[10, 25, 50]}
+            pagination
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25, page: 0 }
+              }
+            }}
+            pageSizeOptions={[25, 50, 100]}
+            paginationMode="client"
+            rowCount={suppliers.length}
+            getRowId={(row) => row.id}
             disableSelectionOnClick
             sx={{
               '& .MuiDataGrid-cell': {

@@ -10,8 +10,10 @@ function AuthForm({ onLogin }) {
 
   const handleLogin = async () => {
     try {
-      console.log('Attempting login with:', username, password);
-      const res = await login({ username, password });
+      // Convert username to lowercase for case-insensitive login
+      const usernameLower = username.toLowerCase().trim();
+      console.log('Attempting login with:', usernameLower, password);
+      const res = await login({ username: usernameLower, password });
       console.log('Login response:', res.data);
       if (onLogin) onLogin(res.data);
       setError('');
