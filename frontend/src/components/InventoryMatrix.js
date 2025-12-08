@@ -4,8 +4,10 @@ import { DataGrid } from '@mui/x-data-grid';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import { getWarehouses, getDrugs, getInventory } from '../utils/api';
 import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationUtils';
+import { useSettings } from '../utils/SettingsContext';
 
 function InventoryMatrix() {
+  const { settings } = useSettings();
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -97,7 +99,7 @@ function InventoryMatrix() {
         pinned: 'right',
         renderCell: (params) => {
             const expireDate = params.row.min_expire;
-            const color = expireDate ? getExpirationColor(expireDate) : 'inherit';
+            const color = expireDate ? getExpirationColor(expireDate, settings.exp_warning_days) : 'inherit';
             return (
                 <Typography 
                     fontWeight="bold" 

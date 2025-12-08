@@ -20,6 +20,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PersonIcon from '@mui/icons-material/Person';
 import BackupIcon from '@mui/icons-material/Backup';
 import HistoryIcon from '@mui/icons-material/History';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -92,7 +93,8 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       color: '#d32f2f',
       submenu: [
         { title: 'گزارشات جامع', icon: <AssessmentIcon />, path: '/report' },
-        { title: 'داروهای منقضی شده', icon: <ReceiptIcon />, path: '/report-expired' }
+        { title: 'داروهای منقضی شده', icon: <ReceiptIcon />, path: '/report-expired' },
+        { title: 'داروهای معدوم شده', icon: <DeleteForeverIcon />, path: '/disposed', access: 'admin' }
       ]
     },
     {
@@ -101,8 +103,8 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       color: '#0288d1',
       submenu: [
         { title: 'کاربران و دسترسی', icon: <PeopleIcon />, path: '/users', access: 'admin' },
-        { title: 'تاریخچه عملیات', icon: <HistoryIcon />, path: '/logs' },
-        { title: 'بکاپ دیتابیس', icon: <BackupIcon />, path: '/backup' },
+        { title: 'تاریخچه عملیات', icon: <HistoryIcon />, path: '/logs', access: 'admin' },
+        { title: 'بکاپ دیتابیس', icon: <BackupIcon />, path: '/backup', access: 'admin' },
         { title: 'تنظیمات', icon: <SettingsIcon />, path: '/settings' }
       ]
     }
@@ -157,6 +159,34 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
             {collapsed ? <ChevronLeftIcon /> : <ChevronRightIcon />}
         </IconButton>
       </Box>
+      
+      {/* User Info Section */}
+      {!collapsed && user && (
+        <Box sx={{ 
+          p: 2, 
+          bgcolor: 'grey.100', 
+          borderBottom: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Box display="flex" alignItems="center" gap={1.5}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+              <PersonIcon />
+            </Avatar>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight="bold" noWrap>
+                {user.full_name || user.username}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {user.access_level === 'superadmin' && 'مدیر کل'}
+                {user.access_level === 'admin' && 'مدیر'}
+                {user.access_level === 'warehouseman' && 'انباردار'}
+                {user.access_level === 'viewer' && 'مشاهده‌گر'}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      )}
+      
       <Divider />
       
       <List component="nav" sx={{ px: 1 }}>

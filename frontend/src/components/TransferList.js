@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Typography, Paper, Button, TextField, Dialog, DialogTitle, 
-  DialogContent, DialogActions, Chip, IconButton, Tooltip, InputAdornment
+  DialogContent, DialogActions, Chip, IconButton, Tooltip, InputAdornment,
+  Grid, Card, CardContent, MenuItem
 } from '@mui/material';
 import { DataGrid, faIR } from '@mui/x-data-grid';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -10,14 +11,24 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SearchIcon from '@mui/icons-material/Search';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { getExpirationColor } from '../utils/expirationUtils';
+import { useSettings } from '../utils/SettingsContext';
+import { useCurrentUser } from '../utils/useCurrentUser';
+import { isWarehouseman } from '../utils/permissions';
 
 function TransferList() {
+  const { settings } = useSettings();
+  const currentUser = useCurrentUser();
   const [transfers, setTransfers] = useState([]);
   const [filteredTransfers, setFilteredTransfers] = useState([]);
   const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
   const [receivedQty, setReceivedQty] = useState('');
@@ -30,22 +41,48 @@ function TransferList() {
   }, []);
 
   useEffect(() => {
-    if (searchText.trim() === '') {
-      setFilteredTransfers(transfers);
-    } else {
+    let filtered = transfers;
+    
+    // Apply search filter
+    if (searchText.trim() !== '') {
       const lowercaseSearch = searchText.toLowerCase();
-      const filtered = transfers.filter(transfer =>
-        transfer.drug_name?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.source_warehouse?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.dest_warehouse?.toLowerCase().includes(lowercaseSearch) ||
+      filtered = filtered.filter(transfer =>
+        transfer.drug?.name?.toLowerCase().includes(lowercaseSearch) ||
+        transfer.source_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+        transfer.destination_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+        transfer.consumer?.name?.toLowerCase().includes(lowercaseSearch) ||
         transfer.status?.toLowerCase().includes(lowercaseSearch) ||
         transfer.expire_date?.includes(lowercaseSearch) ||
         transfer.quantity_sent?.toString().includes(lowercaseSearch) ||
         transfer.quantity_received?.toString().includes(lowercaseSearch)
       );
-      setFilteredTransfers(filtered);
     }
-  }, [searchText, transfers]);
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(transfer => transfer.status === statusFilter);
+    }
+    
+    // Apply type filter
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(transfer => transfer.transfer_type === typeFilter);
+    }
+    
+    setFilteredTransfers(filtered);
+  }, [searchText, statusFilter, typeFilter, transfers]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    return {
+      total: transfers.length,
+      pending: transfers.filter(t => t.status === 'pending').length,
+      confirmed: transfers.filter(t => t.status === 'confirmed').length,
+      rejected: transfers.filter(t => t.status === 'rejected').length,
+      mismatch: transfers.filter(t => t.status === 'mismatch').length,
+      totalSent: transfers.reduce((sum, t) => sum + (t.quantity_sent || 0), 0),
+      totalReceived: transfers.reduce((sum, t) => sum + (t.quantity_received || 0), 0)
+    };
+  }, [transfers]);
 
   const loadTransfers = async () => {
     setLoading(true);
@@ -193,7 +230,7 @@ function TransferList() {
       renderCell: (params) => (
         <Chip 
           label={params.value} 
-          color={getExpirationColor(params.value)}
+          color={getExpirationColor(params.value, settings.exp_warning_days)}
           size="small"
           sx={{ fontWeight: 'bold' }}
         />
@@ -245,22 +282,29 @@ function TransferList() {
         
         if (!isPending || !isWarehouseTransfer) return null;
         
+        // Check if user can confirm this transfer
+        const canConfirm = !isWarehouseman(currentUser) || 
+          (currentUser?.warehouses?.includes(params.row.destination_warehouse?.id));
+        
         return (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title="تایید حواله">
-              <IconButton
-                size="small"
-                color="success"
-                onClick={() => handleConfirm(params.row)}
-                sx={{ 
-                  '&:hover': { 
-                    backgroundColor: 'success.light',
-                    color: 'white'
-                  } 
-                }}
-              >
-                <CheckCircleIcon fontSize="small" />
-              </IconButton>
+            <Tooltip title={canConfirm ? "تایید حواله" : "فقط حواله‌های به انبار شما قابل تایید است"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="success"
+                  onClick={() => handleConfirm(params.row)}
+                  disabled={!canConfirm}
+                  sx={{ 
+                    '&:hover': { 
+                      backgroundColor: 'success.light',
+                      color: 'white'
+                    } 
+                  }}
+                >
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="رد حواله">
               <IconButton
@@ -314,28 +358,130 @@ function TransferList() {
         {message && (
           <Chip 
             label={message} 
-            color={messageType === 'success' ? 'success' : 'error'} 
+            color={messageType === 'success' ? 'success' : messageType === 'warning' ? 'warning' : 'error'} 
             sx={{ mb: 2, width: '100%', justifyContent: 'center', height: 'auto', py: 1 }}
           />
         )}
 
-        {/* Search Field */}
-        <Box mb={2}>
-          <TextField
-            fullWidth
-            placeholder="جستجو بر اساس دارو، انبار مبدا، انبار مقصد، وضعیت، تاریخ یا مقدار..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ bgcolor: 'background.paper' }}
-          />
-        </Box>
+        {/* Statistics Cards */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#e3f2fd', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <LocalShippingIcon color="primary" sx={{ fontSize: 32, mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight="bold" color="primary">{stats.total}</Typography>
+                  <Typography variant="caption" color="text.secondary">کل حواله‌ها</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#fff3e0', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <PendingActionsIcon color="warning" sx={{ fontSize: 32, mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight="bold" color="warning.main">{stats.pending}</Typography>
+                  <Typography variant="caption" color="text.secondary">در انتظار</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#e8f5e9', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <CheckCircleOutlineIcon color="success" sx={{ fontSize: 32, mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight="bold" color="success.main">{stats.confirmed}</Typography>
+                  <Typography variant="caption" color="text.secondary">تایید شده</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#ffebee', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <ErrorOutlineIcon color="error" sx={{ fontSize: 32, mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight="bold" color="error.main">{stats.rejected}</Typography>
+                  <Typography variant="caption" color="text.secondary">رد شده</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#f3e5f5', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <WarningAmberIcon sx={{ color: '#9c27b0', fontSize: 32, mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight="bold" sx={{ color: '#9c27b0' }}>{stats.mismatch}</Typography>
+                  <Typography variant="caption" color="text.secondary">عدم تطابق</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4} md={2}>
+            <Card sx={{ bgcolor: '#e0f2f1', height: '100%' }}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <Typography variant="h6" fontWeight="bold" color="info.main">📦</Typography>
+                  <Typography variant="h6" fontWeight="bold" color="info.main">{stats.totalSent}</Typography>
+                  <Typography variant="caption" color="text.secondary">کل ارسالی</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Filters */}
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={6} md={4}>
+            <TextField
+              fullWidth
+              placeholder="جستجو بر اساس دارو، انبار، مصرف‌کننده، تاریخ..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12} sm={3} md={2}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="وضعیت"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <MenuItem value="all">همه</MenuItem>
+              <MenuItem value="pending">در انتظار</MenuItem>
+              <MenuItem value="confirmed">تایید شده</MenuItem>
+              <MenuItem value="rejected">رد شده</MenuItem>
+              <MenuItem value="mismatch">عدم تطابق</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={3} md={2}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="نوع حواله"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <MenuItem value="all">همه</MenuItem>
+              <MenuItem value="warehouse">بین انبار</MenuItem>
+              <MenuItem value="consumer">مصرف‌کننده</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
 
         <Box sx={{ height: { xs: 500, sm: 600 }, width: '100%' }}>
           <DataGrid

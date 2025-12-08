@@ -1,12 +1,35 @@
-import React, { useState } from 'react';
-import { Box, TextField, Button, Typography, Avatar, Paper } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { Box, TextField, Button, Typography, Avatar, Paper, Autocomplete } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import { login } from '../utils/api';
+import axios from 'axios';
+import { login, API_BASE_URL } from '../utils/api';
 
 function AuthForm({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [usersList, setUsersList] = useState([]);
+
+  useEffect(() => {
+    // Load users list for dropdown
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/users/login-list`);
+      // Create options with full_name as label and username as value
+      const usernames = res.data.map(user => ({
+        label: user.full_name ? `${user.full_name} (${user.username})` : user.username,
+        value: user.username
+      }));
+      setUsersList(usernames);
+    } catch (err) {
+      console.error('Error loading users:', err);
+      // If API fails, allow manual entry
+      setUsersList([]);
+    }
+  };
 
   const handleLogin = async () => {
     try {
@@ -34,7 +57,37 @@ function AuthForm({ onLogin }) {
             ورود به سامانه مدیریت انبار دارو
           </Typography>
         </Box>
-        <TextField label="نام کاربری" fullWidth margin="normal" value={username} onChange={e => setUsername(e.target.value)} autoFocus />
+        
+        <Autocomplete
+          freeSolo
+          options={usersList}
+          getOptionLabel={(option) => typeof option === 'string' ? option : option.label}
+          value={usersList.find(u => u.value === username) || username}
+          onChange={(event, newValue) => {
+            if (typeof newValue === 'string') {
+              setUsername(newValue);
+            } else if (newValue && newValue.value) {
+              setUsername(newValue.value);
+            } else {
+              setUsername('');
+            }
+          }}
+          onInputChange={(event, newInputValue) => {
+            setUsername(newInputValue);
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="نام کاربری"
+              fullWidth
+              margin="normal"
+              autoFocus
+              helperText="انتخاب از لیست یا تایپ مستقیم"
+            />
+          )}
+          noOptionsText="کاربری یافت نشد"
+        />
+        
         <TextField label="رمز عبور" type="password" fullWidth margin="normal" value={password} onChange={e => setPassword(e.target.value)} />
         {error && <Typography color="error" align="center" sx={{ mt: 1 }}>{error}</Typography>}
         <Button variant="contained" color="primary" fullWidth sx={{ mt: 3, py: 1.5, fontWeight: 'bold', fontSize: 18 }} onClick={handleLogin}>

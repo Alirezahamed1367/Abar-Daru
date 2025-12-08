@@ -10,8 +10,13 @@ import axios from 'axios';
 import moment from 'jalali-moment';
 import InventoryDialog from './InventoryDialog';
 import { getExpirationColor, getExpirationBgColor, getExpirationLabel } from '../utils/expirationUtils';
+import { canEdit, filterWarehousesByAccess } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
+import { useSettings } from '../utils/SettingsContext';
 
 function InventoryForm() {
+  const currentUser = useCurrentUser();
+  const { settings } = useSettings();
   const [receipts, setReceipts] = React.useState([]);
   const [filteredReceipts, setFilteredReceipts] = React.useState([]);
   const [searchText, setSearchText] = React.useState('');
@@ -73,10 +78,7 @@ function InventoryForm() {
         
         // Filter warehouses based on user access
         let allWarehouses = warehousesRes.data;
-        if (storedUser && storedUser.access_level === 'warehouseman' && storedUser.warehouses) {
-             allWarehouses = allWarehouses.filter(w => storedUser.warehouses.includes(w.id));
-        }
-        setWarehouses(allWarehouses);
+        setWarehouses(filterWarehousesByAccess(allWarehouses, storedUser));
         
         setSuppliers(suppliersRes.data);
       } catch {
@@ -227,15 +229,17 @@ function InventoryForm() {
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
             📦 مدیریت رسیدهای ورودی
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenNewDialog}
-            sx={{ fontWeight: 'bold' }}
-          >
-            ثبت رسید جدید
-          </Button>
+          {canEdit(currentUser) && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenNewDialog}
+              sx={{ fontWeight: 'bold' }}
+            >
+              ثبت رسید جدید
+            </Button>
+          )}
         </Box>
         
         {message && (
@@ -307,44 +311,45 @@ function InventoryForm() {
                 renderCell: (params) => (
                   <Chip 
                     label={params.value} 
-                    color={getExpirationColor(params.value)}
+                    color={getExpirationColor(params.value, settings.exp_warning_days)}
                     size="small"
                     sx={{ fontWeight: 'bold' }}
                   />
                 )
               },
               { field: 'entry_date', headerName: 'تاریخ ثبت', width: 110 },
-              {
+              // Only show actions column if user can edit
+              ...(canEdit(currentUser) ? [{
                 field: 'actions',
                 headerName: 'عملیات',
                 width: 130,
                 renderCell: (params) => {
                   const id = params.row.id;
-                  const canEdit = canEditMap[id];
+                  const canEditRow = canEditMap[id];
                   return (
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                       <IconButton
                         size="small"
                         color="warning"
-                        disabled={!canEdit || actionLoading[id]}
+                        disabled={!canEditRow || actionLoading[id]}
                         onClick={() => handleEdit(id)}
-                        title={canEdit ? 'ویرایش' : 'استفاده شده - غیرقابل ویرایش'}
+                        title={canEditRow ? 'ویرایش' : 'استفاده شده - غیرقابل ویرایش'}
                       >
                         <EditIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         size="small"
                         color="error"
-                        disabled={!canEdit || actionLoading[id]}
+                        disabled={!canEditRow || actionLoading[id]}
                         onClick={() => handleDelete(id)}
-                        title={canEdit ? 'حذف' : 'استفاده شده - غیرقابل حذف'}
+                        title={canEditRow ? 'حذف' : 'استفاده شده - غیرقابل حذف'}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Box>
                   );
                 },
-              },
+              }] : []),
             ]}
             loading={loading}
             pageSize={10}
@@ -353,7 +358,7 @@ function InventoryForm() {
             localeText={faIR.components.MuiDataGrid.defaultProps.localeText}
             disableSelectionOnClick
             getRowClassName={(params) => {
-              const color = getExpirationColor(params.row.expire_date);
+              const color = getExpirationColor(params.row.expire_date, settings.exp_warning_days);
               return color === 'error' ? 'row-expired' : 
                      color === 'warning' ? 'row-expiring-soon' : 'row-normal';
             }}

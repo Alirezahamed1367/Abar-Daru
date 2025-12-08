@@ -24,8 +24,11 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import EmailIcon from '@mui/icons-material/Email';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { API_BASE_URL } from '../utils/api';
+import { isAdmin } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
 
 function SupplierManagement() {
+  const currentUser = useCurrentUser();
   const [suppliers, setSuppliers] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -198,28 +201,31 @@ function SupplierManagement() {
       type: 'actions',
       headerName: 'عملیات',
       width: 120,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={
-            <Tooltip title="ویرایش">
-              <EditIcon />
-            </Tooltip>
-          }
-          label="ویرایش"
-          onClick={() => handleOpenDialog(params.row)}
-          color="primary"
-        />,
-        <GridActionsCellItem
-          icon={
-            <Tooltip title="حذف">
-              <DeleteIcon />
-            </Tooltip>
-          }
-          label="حذف"
-          onClick={() => handleDelete(params.id)}
-          color="error"
-        />
-      ]
+      getActions: (params) => {
+        if (!isAdmin(currentUser)) return [];
+        return [
+          <GridActionsCellItem
+            icon={
+              <Tooltip title="ویرایش">
+                <EditIcon />
+              </Tooltip>
+            }
+            label="ویرایش"
+            onClick={() => handleOpenDialog(params.row)}
+            color="primary"
+          />,
+          <GridActionsCellItem
+            icon={
+              <Tooltip title="حذف">
+                <DeleteIcon />
+              </Tooltip>
+            }
+            label="حذف"
+            onClick={() => handleDelete(params.id)}
+            color="error"
+          />
+        ];
+      }
     }
   ];
 
@@ -230,17 +236,19 @@ function SupplierManagement() {
           <Typography variant="h5" fontWeight="bold" color="primary">
             مدیریت تأمین‌کنندگان
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            sx={{
-              background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-              boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)'
-            }}
-          >
-            افزودن تأمین‌کننده
-          </Button>
+          {isAdmin(currentUser) && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{
+                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)'
+              }}
+            >
+              افزودن تأمین‌کننده
+            </Button>
+          )}
         </Box>
 
         <Box sx={{ height: 600, width: '100%' }}>

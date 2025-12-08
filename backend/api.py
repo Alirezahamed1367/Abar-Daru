@@ -65,6 +65,31 @@ def require_access(access_levels: list):
         return wrapper
     return decorator
 
+def require_edit_permission(current_user: User = Depends(get_current_user)):
+    """
+    Prevent viewers from editing/creating/deleting
+    Only warehouseman, admin, superadmin can edit
+    """
+    if current_user.access_level == 'viewer':
+        raise HTTPException(status_code=403, detail="مشاهده‌گران دسترسی ثبت/ویرایش ندارند")
+    return current_user
+
+def check_warehouse_access(user: User, warehouse_id: int):
+    """
+    Check if user has access to specific warehouse
+    - admin/superadmin: access to all warehouses
+    - warehouseman: only their assigned warehouses
+    - viewer: no edit access (already blocked by require_edit_permission)
+    """
+    if user.access_level in ['admin', 'superadmin']:
+        return True
+    
+    if user.access_level == 'warehouseman':
+        user_warehouse_ids = [w.id for w in user.warehouses]
+        return warehouse_id in user_warehouse_ids
+    
+    return False
+
 # Dependency
 
 def get_db():
@@ -90,6 +115,16 @@ def log_operation(db: Session, action: str, details: str, user_id: int = None, c
         db.commit()
     except Exception as e:
         print(f"Failed to log operation: {e}")
+
+# Public endpoint for login page - returns only usernames
+@router.get('/users/login-list')
+def get_users_for_login(db: Session = Depends(get_db)):
+    """
+    Public endpoint that returns minimal user info for login dropdown
+    Only returns username and full_name - no sensitive data
+    """
+    users = db.query(User).all()
+    return [{"username": u.username, "full_name": u.full_name} for u in users]
 
 # User registration/login/password recovery
 @router.post('/login')
@@ -138,7 +173,10 @@ def get_warehouses(db: Session = Depends(get_db), include_virtual: bool = False)
     return query.all()
 
 @router.post('/warehouses')
-def add_warehouse(data: dict, db: Session = Depends(get_db)):
+def add_warehouse(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can create warehouses
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند انبار تعریف کنند")
     warehouse = Warehouse(**data)
     db.add(warehouse)
     db.commit()
@@ -147,7 +185,10 @@ def add_warehouse(data: dict, db: Session = Depends(get_db)):
     return warehouse
 
 @router.put('/warehouses/{warehouse_id}')
-def update_warehouse(warehouse_id: int, data: dict, db: Session = Depends(get_db)):
+def update_warehouse(warehouse_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can update warehouses
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند انبار ویرایش کنند")
     warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
     if not warehouse:
         raise HTTPException(status_code=404, detail="انبار یافت نشد")
@@ -158,11 +199,35 @@ def update_warehouse(warehouse_id: int, data: dict, db: Session = Depends(get_db
     return warehouse
 
 @router.delete('/warehouses/{warehouse_id}')
-def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db)):
+def delete_warehouse(warehouse_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can delete warehouses
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند انبار حذف کنند")
     warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
     if not warehouse:
         raise HTTPException(status_code=404, detail="انبار یافت نشد")
+    
     name = warehouse.name
+    
+    # Check if warehouse has inventory
+    inventory_count = db.query(Inventory).filter(Inventory.warehouse_id == warehouse_id).count()
+    if inventory_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"این انبار دارای {inventory_count} رسید موجودی است. ابتدا موجودی‌های مربوطه را حذف کنید"
+        )
+    
+    # Check if warehouse is used in transfers (source or destination)
+    transfer_count = db.query(Transfer).filter(
+        (Transfer.source_warehouse_id == warehouse_id) | 
+        (Transfer.destination_warehouse_id == warehouse_id)
+    ).count()
+    if transfer_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"این انبار در {transfer_count} انتقال استفاده شده است. ابتدا انتقال‌های مربوطه را حذف کنید"
+        )
+    
     db.delete(warehouse)
     db.commit()
     log_operation(db, "Delete Warehouse", f"حذف انبار: {name}")
@@ -202,7 +267,10 @@ class DrugUpdate(BaseModel):
 
 
 @router.post('/drugs', response_model=DrugResponse)
-def add_drug(data: DrugCreate, db: Session = Depends(get_db)):
+def add_drug(data: DrugCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can create drugs
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند دارو تعریف کنند")
     drug = Drug(**data.dict())
     db.add(drug)
     db.commit()
@@ -213,7 +281,10 @@ def add_drug(data: DrugCreate, db: Session = Depends(get_db)):
 
 
 @router.put('/drugs/{drug_id}', response_model=DrugResponse)
-def update_drug(drug_id: int, data: DrugUpdate, db: Session = Depends(get_db)):
+def update_drug(drug_id: int, data: DrugUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can update drugs
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند دارو ویرایش کنند")
     drug = db.query(Drug).filter(Drug.id == drug_id).first()
     if not drug:
         raise HTTPException(status_code=404, detail="دارو یافت نشد")
@@ -226,22 +297,62 @@ def update_drug(drug_id: int, data: DrugUpdate, db: Session = Depends(get_db)):
     return JSONResponse(content=jsonable_encoder(drug))
 
 @router.delete('/drugs/{drug_id}')
-def delete_drug(drug_id: int, db: Session = Depends(get_db)):
+def delete_drug(drug_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can delete drugs
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند دارو حذف کنند")
+    import os
+    
     drug = db.query(Drug).filter(Drug.id == drug_id).first()
     if not drug:
         raise HTTPException(status_code=404, detail="دارو یافت نشد")
+    
     name = drug.name
+    
+    # Check if drug is used in inventory
+    inventory_count = db.query(Inventory).filter(Inventory.drug_id == drug_id).count()
+    if inventory_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"این دارو در {inventory_count} رسید انبار استفاده شده است. ابتدا رسیدهای مربوطه را حذف کنید"
+        )
+    
+    # Check if drug is used in transfers
+    transfer_count = db.query(Transfer).filter(Transfer.drug_id == drug_id).count()
+    if transfer_count > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"این دارو در {transfer_count} انتقال استفاده شده است. ابتدا انتقال‌های مربوطه را حذف کنید"
+        )
+    
+    # Delete image file from disk if exists
+    if drug.image:
+        image_path = drug.image
+        if os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+                print(f"Deleted image file: {image_path}")
+            except Exception as e:
+                print(f"Error deleting image file: {e}")
+    
+    # Delete drug from database (image_data will be automatically removed)
     db.delete(drug)
     db.commit()
+    
+    # Log operation (keep log for audit trail)
     log_operation(db, "Delete Drug", f"حذف دارو: {name}")
-    return {"message": "دارو حذف شد"}
+    
+    return {"message": "دارو و تصاویر مربوطه حذف شد"}
 
 @router.get('/suppliers')
 def get_suppliers(db: Session = Depends(get_db)):
     return db.query(Supplier).all()
 
 @router.post('/suppliers')
-def add_supplier(data: dict, db: Session = Depends(get_db)):
+def add_supplier(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can create suppliers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند تأمین‌کننده تعریف کنند")
     supplier = Supplier(**data)
     db.add(supplier)
     db.commit()
@@ -249,7 +360,10 @@ def add_supplier(data: dict, db: Session = Depends(get_db)):
     return supplier
 
 @router.put('/suppliers/{supplier_id}')
-def update_supplier(supplier_id: int, data: dict, db: Session = Depends(get_db)):
+def update_supplier(supplier_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can update suppliers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند تأمین‌کننده ویرایش کنند")
     db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not db_supplier:
         raise HTTPException(status_code=404, detail="تأمین‌کننده یافت نشد")
@@ -262,13 +376,26 @@ def update_supplier(supplier_id: int, data: dict, db: Session = Depends(get_db))
     return db_supplier
 
 @router.delete('/suppliers/{supplier_id}')
-def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+def delete_supplier(supplier_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can delete suppliers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند تأمین‌کننده حذف کنند")
     db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if not db_supplier:
         raise HTTPException(status_code=404, detail="تأمین‌کننده یافت نشد")
     
+    # Check if supplier is used in inventory
+    inventory_count = db.query(Inventory).filter(Inventory.supplier_id == supplier_id).count()
+    if inventory_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"این تأمین‌کننده در {inventory_count} رسید انبار استفاده شده است. ابتدا رسیدهای مربوطه را حذف کنید"
+        )
+    
+    name = db_supplier.name
     db.delete(db_supplier)
     db.commit()
+    log_operation(db, "Delete Supplier", f"حذف تأمین‌کننده: {name}")
     return {"message": "تأمین‌کننده با موفقیت حذف شد"}
 
 @router.get('/consumers')
@@ -276,7 +403,10 @@ def get_consumers(db: Session = Depends(get_db)):
     return db.query(Consumer).all()
 
 @router.post('/consumers')
-def add_consumer(data: dict, db: Session = Depends(get_db)):
+def add_consumer(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can create consumers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند مصرف‌کننده تعریف کنند")
     consumer = Consumer(**data)
     db.add(consumer)
     db.commit()
@@ -284,7 +414,10 @@ def add_consumer(data: dict, db: Session = Depends(get_db)):
     return consumer
 
 @router.put('/consumers/{consumer_id}')
-def update_consumer(consumer_id: int, data: dict, db: Session = Depends(get_db)):
+def update_consumer(consumer_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can update consumers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند مصرف‌کننده ویرایش کنند")
     db_consumer = db.query(Consumer).filter(Consumer.id == consumer_id).first()
     if not db_consumer:
         raise HTTPException(status_code=404, detail="مصرف‌کننده یافت نشد")
@@ -297,29 +430,53 @@ def update_consumer(consumer_id: int, data: dict, db: Session = Depends(get_db))
     return db_consumer
 
 @router.delete('/consumers/{consumer_id}')
-def delete_consumer(consumer_id: int, db: Session = Depends(get_db)):
+def delete_consumer(consumer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Only admin/superadmin can delete consumers
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط مدیران می‌توانند مصرف‌کننده حذف کنند")
     db_consumer = db.query(Consumer).filter(Consumer.id == consumer_id).first()
     if not db_consumer:
         raise HTTPException(status_code=404, detail="مصرف‌کننده یافت نشد")
     
+    # Check if consumer is used in transfers
+    transfer_count = db.query(Transfer).filter(Transfer.consumer_id == consumer_id).count()
+    if transfer_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"این مصرف‌کننده در {transfer_count} انتقال استفاده شده است. ابتدا انتقال‌های مربوطه را حذف کنید"
+        )
+    
+    name = db_consumer.name
     db.delete(db_consumer)
     db.commit()
+    log_operation(db, "Delete Consumer", f"حذف مصرف‌کننده: {name}")
     return {"message": "مصرف‌کننده با موفقیت حذف شد"}
 
 @router.get('/inventory')
-def get_inventory(db: Session = Depends(get_db), include_virtual: bool = False):
+def get_inventory(db: Session = Depends(get_db), include_virtual: bool = False, include_disposed: bool = False):
     """
     دریافت موجودی انبارها
-    به طور پیش‌فرض، موجودی انبارهای مجازی (TRANSIT) نمایش داده نمی‌شود
+    به طور پیش‌فرض، موجودی انبارهای مجازی (TRANSIT) و داروهای معدوم شده نمایش داده نمی‌شود
     """
     query = db.query(Inventory)
+    
+    # Filter out disposed items by default
+    if not include_disposed:
+        query = query.filter(Inventory.is_disposed == False)
+    
     if not include_virtual:
         # Join with Warehouse and filter out virtual warehouses
         query = query.join(Warehouse).filter(Warehouse.is_virtual == False)
+    
     return query.order_by(Inventory.expire_date.asc()).all()
 
 @router.post('/inventory')
-def add_inventory(data: dict, db: Session = Depends(get_db)):
+def add_inventory(data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_edit_permission)):
+    # Check warehouse access for warehousemen
+    warehouse_id = data.get('warehouse_id')
+    if not check_warehouse_access(current_user, warehouse_id):
+        raise HTTPException(status_code=403, detail="شما فقط می‌توانید برای انبار اختصاصی خود رسید ثبت کنید")
+    
     # Check for duplicate (warehouse_id + drug_id + expire_date)
     existing = db.query(Inventory).filter(
         Inventory.warehouse_id == data.get('warehouse_id'),
@@ -357,10 +514,14 @@ def add_inventory(data: dict, db: Session = Depends(get_db)):
     return inventory
 
 @router.put('/inventory/{inventory_id}')
-def update_inventory(inventory_id: int, data: dict, db: Session = Depends(get_db)):
+def update_inventory(inventory_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_edit_permission)):
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if not inventory:
         raise HTTPException(status_code=404, detail="رسید یافت نشد")
+    
+    # Check warehouse access
+    if not check_warehouse_access(current_user, inventory.warehouse_id):
+        raise HTTPException(status_code=403, detail="شما فقط می‌توانید رسیدهای انبار خود را ویرایش کنید")
     
     for key, value in data.items():
         setattr(inventory, key, value)
@@ -371,14 +532,28 @@ def update_inventory(inventory_id: int, data: dict, db: Session = Depends(get_db
     return inventory
 
 @router.delete('/inventory/{inventory_id}')
-def delete_inventory(inventory_id: int, db: Session = Depends(get_db)):
+def delete_inventory(inventory_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_edit_permission)):
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if not inventory:
         raise HTTPException(status_code=404, detail="رسید یافت نشد")
     
+    # Check warehouse access
+    if not check_warehouse_access(current_user, inventory.warehouse_id):
+        raise HTTPException(status_code=403, detail="شما فقط می‌توانید رسیدهای انبار خود را حذف کنید")
+    
+    # Get info for logging
+    drug = db.query(Drug).filter(Drug.id == inventory.drug_id).first()
+    warehouse = db.query(Warehouse).filter(Warehouse.id == inventory.warehouse_id).first()
+    drug_name = drug.name if drug else "نامشخص"
+    warehouse_name = warehouse.name if warehouse else "نامشخص"
+    
+    # Delete inventory completely
     db.delete(inventory)
     db.commit()
-    log_operation(db, "Delete Inventory", f"حذف موجودی شماره: {inventory_id}")
+    
+    # Log for audit trail
+    log_operation(db, "Delete Inventory", f"حذف رسید: {drug_name} - {warehouse_name} - تعداد: {inventory.quantity}")
+    
     return {"message": "رسید حذف شد"}
 
 @router.get('/logs')
@@ -527,12 +702,43 @@ def get_drug_image(drug_id: int, db: Session = Depends(get_db)):
 # ... (implement endpoints for inventory receipt, transfer, and logs)
 
 # Backup database
-@router.post('/backup-db')
-def backup_db():
-    src = 'pharmacy.db'
-    dst = f'db_backup/pharmacy_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
-    shutil.copy(src, dst)
-    return {"backup": dst}
+@router.get('/backup-db')
+def backup_db(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import os
+    
+    # Only admin and superadmin can create backups
+    if current_user.access_level not in ['admin', 'superadmin']:
+        raise HTTPException(status_code=403, detail="فقط ادمین می‌تواند بکاپ ایجاد کند")
+    
+    # Use absolute paths for database and backup directory
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(base_dir, 'pharmacy.db')
+    backup_dir = os.path.join(base_dir, 'db_backup')
+    
+    # Create backup directory if it doesn't exist
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f'pharmacy_{timestamp}.db'
+    dst = os.path.join(backup_dir, filename)
+    
+    try:
+        shutil.copy(src, dst)
+        
+        # Log the backup operation
+        log = OperationLog(
+            user_id=current_user.id,
+            action="Backup Database",
+            details=f"بکاپ دیتابیس ایجاد شد: {filename}",
+            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        db.add(log)
+        db.commit()
+        
+        return {"backup": filename, "message": f"بکاپ با موفقیت ایجاد شد: {filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطا در ایجاد بکاپ: {str(e)}")
 
 # Expiring drugs dashboard
 @router.get('/expiring-drugs')
@@ -552,7 +758,8 @@ def expiring_drugs(db: Session = Depends(get_db)):
         Drug.has_expiry_date == True,  # Only drugs that have expiry dates
         Inventory.expire_date.isnot(None),
         Inventory.expire_date <= cutoff_str,
-        Inventory.quantity > 0
+        Inventory.quantity > 0,
+        Inventory.is_disposed == False  # Exclude disposed items
     ).all()
     
     output = []
@@ -568,6 +775,42 @@ def expiring_drugs(db: Session = Depends(get_db)):
     
     return output
 
+@router.get('/disposed-drugs')
+def disposed_drugs(db: Session = Depends(get_db)):
+    """
+    دریافت لیست داروهای معدوم شده
+    """
+    results = db.query(Inventory).join(Drug).join(Warehouse).filter(
+        Inventory.is_disposed == True
+    ).all()
+    
+    output = []
+    for inv in results:
+        drug = db.query(Drug).filter(Drug.id == inv.drug_id).first()
+        wh = db.query(Warehouse).filter(Warehouse.id == inv.warehouse_id).first()
+        
+        # Find disposal transfer for this item
+        disposal_transfer = db.query(Transfer).filter(
+            Transfer.source_warehouse_id == inv.warehouse_id,
+            Transfer.drug_id == inv.drug_id,
+            Transfer.expire_date == inv.expire_date,
+            Transfer.transfer_type == 'disposal',
+            Transfer.status == 'confirmed'
+        ).order_by(Transfer.confirmed_at.desc()).first()
+        
+        output.append({
+            'id': inv.id,
+            'name': drug.name if drug else 'نامشخص',
+            'warehouse': wh.name if wh else 'نامشخص',
+            'quantity': inv.quantity,
+            'expire_date': inv.expire_date,
+            'entry_date': inv.entry_date,
+            'disposal_date': disposal_transfer.confirmed_at if disposal_transfer else None,
+            'disposal_transfer_id': disposal_transfer.id if disposal_transfer else None
+        })
+    
+    return output
+
 # Transfer/Havaleh endpoints
 @router.post('/transfer/create')
 def create_transfer(
@@ -579,8 +822,13 @@ def create_transfer(
     consumer_id: Optional[int] = None,
     transfer_type: str = 'warehouse',
     transfer_date: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_edit_permission)
 ):
+    # Check source warehouse access for warehousemen
+    if not check_warehouse_access(current_user, source_warehouse_id):
+        raise HTTPException(status_code=403, detail="شما فقط می‌توانید از انبار اختصاصی خود حواله صادر کنید")
+    
     # Get transit warehouse
     transit_wh = db.query(Warehouse).filter(Warehouse.code == "TRANSIT").first()
     if not transit_wh:
@@ -641,7 +889,7 @@ def create_transfer(
     return transfer
 
 @router.post('/transfer/{transfer_id}/confirm')
-def confirm_transfer(transfer_id: int, quantity_received: int, db: Session = Depends(get_db)):
+def confirm_transfer(transfer_id: int, quantity_received: int, db: Session = Depends(get_db), current_user: User = Depends(require_edit_permission)):
     """
     تایید حواله با مقدار دریافتی
     - اگر quantity_received == quantity_sent: وضعیت confirmed
@@ -650,6 +898,11 @@ def confirm_transfer(transfer_id: int, quantity_received: int, db: Session = Dep
     transfer = db.query(Transfer).filter(Transfer.id == transfer_id).first()
     if not transfer:
         raise HTTPException(status_code=404, detail="حواله یافت نشد")
+    
+    # Check destination warehouse access for warehousemen
+    if transfer.transfer_type == 'warehouse':
+        if not check_warehouse_access(current_user, transfer.destination_warehouse_id):
+            raise HTTPException(status_code=403, detail="شما فقط می‌توانید حواله‌های ورودی به انبار خود را تایید کنید")
     
     if transfer.status != 'pending':
         raise HTTPException(status_code=400, detail="فقط حواله‌های در انتظار قابل تایید هستند")
@@ -679,8 +932,22 @@ def confirm_transfer(transfer_id: int, quantity_received: int, db: Session = Dep
     # Deduct received quantity from transit
     inv_transit.quantity -= quantity_received
     
-    # Add to destination warehouse (warehouse or consumer)
-    if transfer.transfer_type == 'warehouse':
+    # Handle disposal transfers - mark source inventory as disposed
+    if transfer.transfer_type == 'disposal':
+        # Find source inventory and mark as disposed
+        source_inv = db.query(Inventory).filter(
+            Inventory.warehouse_id == transfer.source_warehouse_id,
+            Inventory.drug_id == transfer.drug_id,
+            Inventory.expire_date == transfer.expire_date
+        ).first()
+        
+        if source_inv:
+            source_inv.is_disposed = True
+            log_operation(db, "Dispose Inventory", 
+                         f"معدوم سازی {quantity_received} عدد {source_inv.drug.name} از انبار {source_inv.warehouse.name}")
+    
+    # Add to destination warehouse (only for normal warehouse transfers)
+    elif transfer.transfer_type == 'warehouse':
         inv_dest = db.query(Inventory).filter(
             Inventory.warehouse_id == transfer.destination_warehouse_id,
             Inventory.drug_id == transfer.drug_id,
@@ -720,7 +987,31 @@ def get_pending_transfers(db: Session = Depends(get_db)):
 
 @router.get('/transfer/all')
 def get_all_transfers(db: Session = Depends(get_db)):
-    return db.query(Transfer).all()
+    transfers = db.query(Transfer).all()
+    result = []
+    for t in transfers:
+        transfer_dict = {
+            'id': t.id,
+            'source_warehouse_id': t.source_warehouse_id,
+            'destination_warehouse_id': t.destination_warehouse_id,
+            'consumer_id': t.consumer_id,
+            'transfer_type': t.transfer_type,
+            'drug_id': t.drug_id,
+            'expire_date': t.expire_date,
+            'transfer_date': t.transfer_date,
+            'quantity_sent': t.quantity_sent,
+            'quantity_received': t.quantity_received,
+            'status': t.status,
+            'created_at': t.created_at,
+            'confirmed_at': t.confirmed_at,
+            # Add related objects
+            'source_warehouse': {'id': t.source_warehouse.id, 'name': t.source_warehouse.name} if t.source_warehouse else None,
+            'destination_warehouse': {'id': t.destination_warehouse.id, 'name': t.destination_warehouse.name} if t.destination_warehouse else None,
+            'consumer': {'id': t.consumer.id, 'name': t.consumer.name} if t.consumer else None,
+            'drug': {'id': t.drug.id, 'name': t.drug.name, 'dose': t.drug.dose} if t.drug else None
+        }
+        result.append(transfer_dict)
+    return result
 
 @router.get('/transit/inventory')
 def get_transit_inventory(db: Session = Depends(get_db)):
@@ -1018,7 +1309,7 @@ def get_inventory_report(
     expire_date_to: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Inventory)
+    query = db.query(Inventory).filter(Inventory.is_disposed == False)
     if warehouse_id:
         query = query.filter(Inventory.warehouse_id == warehouse_id)
     if drug_id:
@@ -1051,7 +1342,7 @@ def export_excel(
     expire_date_to: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(Inventory)
+    query = db.query(Inventory).filter(Inventory.is_disposed == False)
     if warehouse_id:
         query = query.filter(Inventory.warehouse_id == warehouse_id)
     if drug_id:
@@ -1088,7 +1379,7 @@ def export_pdf(
     from reportlab.lib.enums import TA_RIGHT, TA_CENTER
     
     # Build query with filters
-    query = db.query(Inventory)
+    query = db.query(Inventory).filter(Inventory.is_disposed == False)
     if warehouse_id:
         query = query.filter(Inventory.warehouse_id == warehouse_id)
     if drug_id:
@@ -1297,7 +1588,12 @@ def add_user(data: dict, db: Session = Depends(get_db)):
     return user
 
 @router.put('/users/{user_id}')
-def update_user(user_id: int, data: dict, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int, 
+    data: dict, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
@@ -1305,6 +1601,15 @@ def update_user(user_id: int, data: dict, db: Session = Depends(get_db)):
     # Prevent editing superadmin
     if user.username == 'superadmin':
         raise HTTPException(status_code=400, detail="امکان ویرایش مدیر کل وجود ندارد")
+    
+    # Password change restrictions for 'admin' user
+    if 'password' in data and data['password'] and user.username == 'admin':
+        # Only superadmin or admin himself can change admin password
+        if current_user.username != 'superadmin' and current_user.username != 'admin':
+            raise HTTPException(
+                status_code=403, 
+                detail="فقط سوپر ادمین یا خود ادمین می‌تواند رمز ادمین را تغییر دهد"
+            )
     
     if 'password' in data and data['password']:
         user.password = pwd_context.hash(data['password'])
@@ -1328,21 +1633,43 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
     if user.username == 'superadmin':
         raise HTTPException(status_code=400, detail="امکان حذف مدیر کل وجود ندارد")
+    if user.username == 'admin':
+        raise HTTPException(status_code=400, detail="امکان حذف کاربر ادمین وجود ندارد")
         
     db.delete(user)
     db.commit()
     return {"message": "کاربر با موفقیت حذف شد"}
 
 @router.post('/change-password')
-def change_password(data: dict, db: Session = Depends(get_db)):
-    # In a real app, we should verify the old password and use the current user from token
-    # For simplicity, we will trust the frontend to send the username or ID
-    # But wait, the user asked for "Change Password in their panel".
-    # Let's assume we pass username and new_password.
-    user = db.query(User).filter(User.username == data['username']).first()
+def change_password(data: dict, authorization: str = Header(None), db: Session = Depends(get_db)):
+    # Extract user from token - users can only change their own password
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    token = authorization.replace('Bearer ', '')
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get('sub')
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get current user and update their password
+    user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="کاربر یافت نشد")
     
+    # Verify old password
+    if 'old_password' not in data or not data['old_password']:
+        raise HTTPException(status_code=400, detail="رمز عبور قبلی الزامی است")
+    
+    if not pwd_context.verify(data['old_password'], user.password):
+        raise HTTPException(status_code=400, detail="رمز عبور قبلی اشتباه است")
+    
+    # Update to new password
     user.password = pwd_context.hash(data['new_password'])
     db.commit()
     return {"message": "رمز عبور با موفقیت تغییر یافت"}

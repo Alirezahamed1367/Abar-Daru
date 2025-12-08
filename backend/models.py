@@ -82,9 +82,10 @@ class Inventory(Base):
     warehouse_id = Column(Integer, ForeignKey('warehouses.id'))
     drug_id = Column(Integer, ForeignKey('drugs.id'))
     supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=True)
-    expire_date = Column(String, nullable=False)  # YYYY-MM format
+    expire_date = Column(String, nullable=True)  # YYYY-MM format, nullable for non-expiry drugs
     entry_date = Column(String, nullable=True) # Jalali YYYY/MM/DD
     quantity = Column(Integer, default=0)
+    is_disposed = Column(Boolean, default=False)  # True if disposed/destroyed, excluded from reports
     warehouse = relationship('Warehouse')
     drug = relationship('Drug')
     supplier = relationship('Supplier')
@@ -104,7 +105,7 @@ class Transfer(Base):
     source_warehouse_id = Column(Integer, ForeignKey('warehouses.id'))
     destination_warehouse_id = Column(Integer, ForeignKey('warehouses.id'), nullable=True)
     consumer_id = Column(Integer, ForeignKey('consumers.id'), nullable=True)
-    transfer_type = Column(String, default='warehouse') # 'warehouse' or 'consumer'
+    transfer_type = Column(String, default='warehouse') # 'warehouse', 'consumer', or 'disposal'
     drug_id = Column(Integer, ForeignKey('drugs.id'))
     expire_date = Column(String, nullable=False)  # YYYY-MM format
     transfer_date = Column(String, nullable=True) # Jalali YYYY/MM/DD

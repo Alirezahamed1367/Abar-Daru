@@ -8,12 +8,26 @@
  */
 
 /**
- * Parse YYYY-MM format to Date object
+ * Parse YYYY-MM or YYYY/MM format to Date object
+ * Returns the LAST day of the expiration month (end of validity)
+ * Supports both formats: "2025-12" and "2025/12"
  */
 export const parseExpireDate = (expireDateStr) => {
   if (!expireDateStr) return null;
-  const [year, month] = expireDateStr.split('-').map(Number);
-  return new Date(year, month - 1, 1); // First day of the month
+  
+  // تبدیل / به - برای یکسان‌سازی فرمت
+  const normalizedDate = expireDateStr.replace(/\//g, '-');
+  
+  const parts = normalizedDate.split('-');
+  if (parts.length !== 2) return null;
+  
+  const year = parseInt(parts[0]);
+  const month = parseInt(parts[1]);
+  
+  if (!year || !month || month < 1 || month > 12) return null;
+  
+  // Last day of the month: use day 0 of next month
+  return new Date(year, month, 0, 23, 59, 59); // End of the expiration month
 };
 
 /**
@@ -24,6 +38,7 @@ export const getDaysUntilExpiration = (expireDateStr) => {
   if (!expireDate) return null;
   
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Reset to start of today
   const diffTime = expireDate - today;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
@@ -33,23 +48,22 @@ export const getDaysUntilExpiration = (expireDateStr) => {
  * Get expiration status color
  * @param {string} expireDateStr - Expiration date in YYYY-MM format
  * @param {number} warningDays - Days threshold for warning (default: 90)
- * @param {number} dangerDays - Days threshold for danger (default: 30)
  * @returns {string} - MUI color: 'error', 'warning', 'success'
  */
-export const getExpirationColor = (expireDateStr, warningDays = 90, dangerDays = 30) => {
+export const getExpirationColor = (expireDateStr, warningDays = 90) => {
   const daysRemaining = getDaysUntilExpiration(expireDateStr);
   
   if (daysRemaining === null) return 'default';
-  if (daysRemaining <= 0 || daysRemaining < dangerDays) return 'error';
-  if (daysRemaining < warningDays) return 'warning';
-  return 'success';
+  if (daysRemaining <= 0) return 'error';  // Expired (red)
+  if (daysRemaining < warningDays) return 'warning';  // Expiring soon (yellow)
+  return 'success';  // Safe (green)
 };
 
 /**
  * Get expiration background color for styling
  */
-export const getExpirationBgColor = (expireDateStr, warningDays = 90, dangerDays = 30) => {
-  const color = getExpirationColor(expireDateStr, warningDays, dangerDays);
+export const getExpirationBgColor = (expireDateStr, warningDays = 90) => {
+  const color = getExpirationColor(expireDateStr, warningDays);
   
   switch (color) {
     case 'error':
@@ -66,8 +80,8 @@ export const getExpirationBgColor = (expireDateStr, warningDays = 90, dangerDays
 /**
  * Get expiration text color for styling
  */
-export const getExpirationTextColor = (expireDateStr, warningDays = 90, dangerDays = 30) => {
-  const color = getExpirationColor(expireDateStr, warningDays, dangerDays);
+export const getExpirationTextColor = (expireDateStr, warningDays = 90) => {
+  const color = getExpirationColor(expireDateStr, warningDays);
   
   switch (color) {
     case 'error':
@@ -114,10 +128,10 @@ export const sortByExpirationDate = (items) => {
 /**
  * Get MUI sx props for expiration date styling
  */
-export const getExpirationSx = (expireDateStr, warningDays = 90, dangerDays = 30) => {
+export const getExpirationSx = (expireDateStr, warningDays = 90) => {
   return {
-    backgroundColor: getExpirationBgColor(expireDateStr, warningDays, dangerDays),
-    color: getExpirationTextColor(expireDateStr, warningDays, dangerDays),
+    backgroundColor: getExpirationBgColor(expireDateStr, warningDays),
+    color: getExpirationTextColor(expireDateStr, warningDays),
     fontWeight: 'bold',
     padding: '4px 8px',
     borderRadius: '4px'

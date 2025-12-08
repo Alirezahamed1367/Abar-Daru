@@ -14,8 +14,11 @@ import InfoIcon from '@mui/icons-material/Info';
 import SearchIcon from '@mui/icons-material/Search';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { canEdit, isAdmin } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
 
 function DrugManagement() {
+  const currentUser = useCurrentUser();
   const [drugs, setDrugs] = useState([]);
   const [filteredDrugs, setFilteredDrugs] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -298,23 +301,33 @@ function DrugManagement() {
       type: 'actions',
       headerName: 'عملیات',
       width: 150,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<InfoIcon color="info" />}
-          label="جزئیات"
-          onClick={() => handleShowDetails(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<EditIcon color="primary" />}
-          label="ویرایش"
-          onClick={() => handleEdit(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon color="error" />}
-          label="حذف"
-          onClick={() => handleDelete(params.row.id)}
-        />
-      ]
+      getActions: (params) => {
+        const actions = [
+          <GridActionsCellItem
+            icon={<InfoIcon color="info" />}
+            label="جزئیات"
+            onClick={() => handleShowDetails(params.row)}
+          />
+        ];
+        
+        // Only admin can edit/delete drugs
+        if (isAdmin(currentUser)) {
+          actions.push(
+            <GridActionsCellItem
+              icon={<EditIcon color="primary" />}
+              label="ویرایش"
+              onClick={() => handleEdit(params.row)}
+            />,
+            <GridActionsCellItem
+              icon={<DeleteIcon color="error" />}
+              label="حذف"
+              onClick={() => handleDelete(params.row.id)}
+            />
+          );
+        }
+        
+        return actions;
+      }
     }
   ];
 
@@ -328,15 +341,17 @@ function DrugManagement() {
               مدیریت داروها
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{ fontWeight: 'bold' }}
-          >
-            افزودن دارو جدید
-          </Button>
+          {isAdmin(currentUser) && (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{ fontWeight: 'bold' }}
+            >
+              افزودن دارو جدید
+            </Button>
+          )}
         </Box>
 
         {/* Search Field */}

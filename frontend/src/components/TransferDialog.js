@@ -14,9 +14,13 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  Autocomplete
+  Autocomplete,
+  Chip
 } from '@mui/material';
 import moment from 'jalali-moment';
+import { getDaysUntilExpiration, getExpirationColor } from '../utils/expirationUtils';
+import { filterWarehousesByAccess } from '../utils/permissions';
+import { useSettings } from '../utils/SettingsContext';
 
 function TransferDialog({ 
   open, 
@@ -26,8 +30,10 @@ function TransferDialog({
   inventory, 
   consumers, 
   onSubmit,
-  editData = null 
+  editData = null,
+  currentUser = null
 }) {
+  const { settings } = useSettings();
   const [transferType, setTransferType] = useState(editData?.transfer_type || 'warehouse');
   const [sourceWarehouse, setSourceWarehouse] = useState(editData?.source_warehouse_id || '');
   const [destWarehouse, setDestWarehouse] = useState(editData?.destination_warehouse_id || '');
@@ -59,7 +65,14 @@ function TransferDialog({
 
   const availableInventory = inventory.filter(
     inv => inv.warehouse_id === parseInt(sourceWarehouse) && inv.quantity > 0
-  );
+  ).sort((a, b) => {
+    // Sort by expiration date: closest to expiry (or expired) first
+    const daysA = getDaysUntilExpiration(a.expire_date);
+    const daysB = getDaysUntilExpiration(b.expire_date);
+    if (daysA === null) return 1; // Items without expiry date go to end
+    if (daysB === null) return -1;
+    return daysA - daysB; // Ascending: expired/closest first
+  });
 
   const handleSubmit = () => {
     if (!selectedInventoryId || !quantity || !sourceWarehouse) {
@@ -75,6 +88,14 @@ function TransferDialog({
     if (transferType === 'consumer' && !consumerId) {
       setError('لطفا مصرف‌کننده را انتخاب کنید');
       return;
+    }
+    
+    // Disposal transfers don't need destination
+    if (transferType === 'disposal') {
+      // Optional: Add confirmation dialog
+      if (!window.confirm('آیا از معدوم سازی این دارو اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
+        return;
+      }
     }
 
     const selectedInv = inventory.find(inv => inv.id === parseInt(selectedInventoryId));
@@ -111,7 +132,7 @@ function TransferDialog({
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <FormControl component="fieldset" fullWidth>
               <FormLabel component="legend">نوع حواله</FormLabel>
               <RadioGroup 
@@ -122,7 +143,23 @@ function TransferDialog({
               >
                 <FormControlLabel value="warehouse" control={<Radio />} label="انتقال بین انبار" />
                 <FormControlLabel value="consumer" control={<Radio />} label="تحویل به مصرف‌کننده" />
+                <FormControlLabel 
+                  value="disposal" 
+                  control={<Radio />} 
+                  label="🗑️ معدوم سازی دارو" 
+                  sx={{ 
+                    '& .MuiFormControlLabel-label': { 
+                      color: 'error.main',
+                      fontWeight: 'bold'
+                    }
+                  }}
+                />
               </RadioGroup>
+              {transferType === 'disposal' && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  ⚠️ توجه: با تایید این حواله، داروی انتخابی از موجودی و گزارشات حذف می‌شود.
+                </Alert>
+              )}
             </FormControl>
           </Grid>
           
@@ -145,7 +182,7 @@ function TransferDialog({
               fullWidth
               disabled={!!editData}
             >
-              {warehouses.map((wh) => (
+              {filterWarehousesByAccess(warehouses, currentUser).map((wh) => (
                 <MenuItem key={wh.id} value={wh.id}>{wh.name}</MenuItem>
               ))}
             </TextField>
@@ -161,11 +198,11 @@ function TransferDialog({
                 fullWidth
                 disabled={!!editData}
               >
-                {warehouses.filter(w => w.id !== sourceWarehouse).map((wh) => (
+                {warehouses.filter(w => !sourceWarehouse || w.id !== parseInt(sourceWarehouse)).map((wh) => (
                   <MenuItem key={wh.id} value={wh.id}>{wh.name}</MenuItem>
                 ))}
               </TextField>
-            ) : (
+            ) : transferType === 'consumer' ? (
               <TextField
                 select
                 label="مصرف‌کننده"
@@ -178,6 +215,10 @@ function TransferDialog({
                   <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
                 ))}
               </TextField>
+            ) : (
+              <Alert severity="info">
+                داروی معدومی نیاز به مقصد ندارد
+              </Alert>
             )}
           </Grid>
 
@@ -186,7 +227,9 @@ function TransferDialog({
               options={availableInventory}
               getOptionLabel={(option) => {
                 const drug = drugs.find(d => d.id === option.drug_id);
-                return drug ? `${drug.name} - انقضا: ${option.expire_date} - موجودی: ${option.quantity}` : 'Unknown';
+                const dose = drug?.dose ? `(${drug.dose})` : '';
+                const expiryLabel = option.expire_date || 'بدون انقضا';
+                return drug ? `${drug.name} ${dose} - انقضا: ${expiryLabel} - موجودی: ${option.quantity}` : 'Unknown';
               }}
               value={availableInventory.find(inv => inv.id === parseInt(selectedInventoryId)) || null}
               onChange={(event, newValue) => {
@@ -202,12 +245,29 @@ function TransferDialog({
                   return drug && drug.name.toLowerCase().includes(searchTerm);
                 });
               }}
+              renderOption={(props, option) => {
+                const drug = drugs.find(d => d.id === option.drug_id);
+                const dose = drug?.dose ? `(${drug.dose})` : '';
+                const chipColor = getExpirationColor(option.expire_date, settings.exp_warning_days);
+                
+                return (
+                  <li {...props} key={option.id}>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                      <span><strong>{drug?.name || 'Unknown'}</strong> {dose}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                        <Chip label={`انقضا: ${option.expire_date || 'ندارد'}`} size="small" color={chipColor} />
+                        <Chip label={`موجودی: ${option.quantity}`} size="small" color="primary" variant="outlined" />
+                      </div>
+                    </div>
+                  </li>
+                );
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="انتخاب دارو (از موجودی)"
                   placeholder="حداقل 3 حرف وارد کنید..."
-                  helperText="جستجو در هر قسمت از نام دارو"
+                  helperText="داروهای منقضی/نزدیک به انقضا اول نمایش داده می‌شوند"
                 />
               )}
               noOptionsText="دارویی در موجودی یافت نشد"

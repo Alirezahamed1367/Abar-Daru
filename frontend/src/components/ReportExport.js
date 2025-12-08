@@ -6,8 +6,11 @@ import BackupIcon from '@mui/icons-material/Backup';
 import SearchIcon from '@mui/icons-material/Search';
 import { DataGrid } from '@mui/x-data-grid';
 import { exportExcel, exportPDF, backupDB, getWarehouses, getDrugs, getSuppliers, getInventoryReport } from '../utils/api';
+import { getDaysUntilExpiration } from '../utils/expirationUtils';
+import { useSettings } from '../utils/SettingsContext';
 
 function ReportExport() {
+  const { settings } = useSettings();
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -197,7 +200,30 @@ function ReportExport() {
           pageSize={10}
           rowsPerPageOptions={[10, 25, 50]}
           disableSelectionOnClick
-          sx={{ direction: 'rtl' }}
+          getRowClassName={(params) => {
+            if (!params.row.expire_date) return '';
+            const days = getDaysUntilExpiration(params.row.expire_date);
+            if (days === null) return '';
+            if (days < 0) return 'row-expired';
+            if (days < 30) return 'row-critical';
+            if (days < settings.exp_warning_days) return 'row-warning';
+            return '';
+          }}
+          sx={{ 
+            direction: 'rtl',
+            '& .row-expired': {
+              bgcolor: '#ffebee',
+              '&:hover': { bgcolor: '#ffcdd2' }
+            },
+            '& .row-critical': {
+              bgcolor: '#ffe0b2',
+              '&:hover': { bgcolor: '#ffcc80' }
+            },
+            '& .row-warning': {
+              bgcolor: '#fff9c4',
+              '&:hover': { bgcolor: '#fff59d' }
+            },
+          }}
         />
       </Paper>
     </Box>

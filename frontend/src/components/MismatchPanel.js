@@ -12,8 +12,10 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { getExpirationColor } from '../utils/expirationUtils';
+import { useSettings } from '../utils/SettingsContext';
 
 function MismatchPanel() {
+  const { settings } = useSettings();
   const [mismatches, setMismatches] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
@@ -133,7 +135,7 @@ function MismatchPanel() {
       renderCell: (params) => (
         <Chip 
           label={params.value} 
-          color={getExpirationColor(params.value)}
+          color={getExpirationColor(params.value, settings.exp_warning_days)}
           size="small"
           sx={{ fontWeight: 'bold' }}
         />

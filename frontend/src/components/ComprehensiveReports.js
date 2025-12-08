@@ -17,6 +17,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { DataGrid } from '@mui/x-data-grid';
 import { exportExcel, exportPDF, getWarehouses, getDrugs, getInventoryReport, getTransfers } from '../utils/api';
 import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationUtils';
+import { useSettings } from '../utils/SettingsContext';
 
 function TabPanel({ children, value, index }) {
   return (
@@ -27,6 +28,7 @@ function TabPanel({ children, value, index }) {
 }
 
 function ComprehensiveReports() {
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState(0);
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
@@ -93,17 +95,17 @@ function ComprehensiveReports() {
       // Apply report type filter
       if (reportType === 'expired') {
         data = data.filter(item => {
-          // Only show drugs that have expiry date (has_expiry_date = true)
-          if (item.has_expiry_date !== true) return false;
+          // فقط داروهایی که تاریخ انقضا دارند
+          if (!item.expire_date || item.has_expiry_date === false) return false;
           const days = getDaysUntilExpiration(item.expire_date);
-          return days < 0;
+          return days !== null && days < 0;
         });
       } else if (reportType === 'expiring-soon') {
         data = data.filter(item => {
-          // Only show drugs that have expiry date (has_expiry_date = true)
-          if (item.has_expiry_date !== true) return false;
+          // فقط داروهایی که تاریخ انقضا دارند
+          if (!item.expire_date || item.has_expiry_date === false) return false;
           const days = getDaysUntilExpiration(item.expire_date);
-          return days >= 0 && days < 90;
+          return days !== null && days > 0 && days < settings.exp_warning_days;
         });
       } else if (reportType === 'low-stock') {
         data = data.filter(item => item.quantity < 50);
@@ -144,11 +146,15 @@ function ComprehensiveReports() {
   const totalItems = safeReportData.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const uniqueDrugs = new Set(safeReportData.map(item => item.drug_id)).size;
   // Only count items with expiry dates for expiry-related statistics
-  const expiredItems = safeReportData.filter(item => item.has_expiry_date === true && getDaysUntilExpiration(item.expire_date) < 0).length;
-  const expiringSoon = safeReportData.filter(item => {
-    if (item.has_expiry_date !== true) return false;
+  const expiredItems = safeReportData.filter(item => {
+    if (!item.expire_date || item.has_expiry_date === false) return false;
     const days = getDaysUntilExpiration(item.expire_date);
-    return days >= 0 && days < 90;
+    return days !== null && days < 0;
+  }).length;
+  const expiringSoon = safeReportData.filter(item => {
+    if (!item.expire_date || item.has_expiry_date === false) return false;
+    const days = getDaysUntilExpiration(item.expire_date);
+    return days !== null && days > 0 && days < settings.exp_warning_days;
   }).length;
 
   const inventoryColumns = [
@@ -192,11 +198,35 @@ function ComprehensiveReports() {
       minWidth: 120,
       resizable: true,
       renderCell: (params) => {
-        const color = getExpirationColor(params.value);
+        if (!params.value || params.row.has_expiry_date === false) {
+          return <Typography>-</Typography>;
+        }
+        const days = getDaysUntilExpiration(params.value);
+        let chipColor = 'default';
+        let chipStyle = {};
+        
+        if (days !== null) {
+          if (days < 0) {
+            chipColor = 'error';
+            chipStyle = { fontWeight: 'bold' };
+          } else if (days < 30) {
+            chipColor = 'error';
+            chipStyle = { fontWeight: 'bold', bgcolor: '#ffe0b2' };
+          } else if (days < settings.exp_warning_days) {
+            chipColor = 'warning';
+            chipStyle = { fontWeight: 'bold' };
+          } else {
+            chipColor = 'success';
+          }
+        }
+        
         return (
-          <Typography sx={{ color }}>
-            {params.value || '-'}
-          </Typography>
+          <Chip 
+            label={params.value} 
+            color={chipColor}
+            sx={chipStyle}
+            size="small"
+          />
         );
       }
     },
@@ -209,7 +239,7 @@ function ComprehensiveReports() {
       renderCell: (params) => (
         <Chip 
           label={params.value} 
-          color={params.value < 50 ? 'error' : 'success'}
+          color="default"
           size="small"
         />
       )
@@ -473,8 +503,30 @@ function ComprehensiveReports() {
             pageSize={10}
             rowsPerPageOptions={[10, 25, 50, 100]}
             disableSelectionOnClick
+            getRowClassName={(params) => {
+              // رنگ‌بندی فقط برای داروهایی که تاریخ انقضا دارند
+              if (!params.row.expire_date || params.row.has_expiry_date === false) return '';
+              const days = getDaysUntilExpiration(params.row.expire_date);
+              if (days === null) return '';
+              if (days < 0) return 'row-expired';
+              if (days < 30) return 'row-critical';
+              if (days < settings.exp_warning_days) return 'row-warning';
+              return '';
+            }}
             sx={{ 
               bgcolor: 'white',
+              '& .row-expired': {
+                bgcolor: '#ffebee',
+                '&:hover': { bgcolor: '#ffcdd2' }
+              },
+              '& .row-critical': {
+                bgcolor: '#ffe0b2',
+                '&:hover': { bgcolor: '#ffcc80' }
+              },
+              '& .row-warning': {
+                bgcolor: '#fff9c4',
+                '&:hover': { bgcolor: '#fff59d' }
+              },
               '& .MuiDataGrid-columnSeparator': {
                 visibility: 'visible',
               },

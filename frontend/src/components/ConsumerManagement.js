@@ -24,8 +24,11 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import EmailIcon from '@mui/icons-material/Email';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { API_BASE_URL } from '../utils/api';
+import { isAdmin } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
 
 function ConsumerManagement() {
+  const currentUser = useCurrentUser();
   const [consumers, setConsumers] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -197,28 +200,31 @@ function ConsumerManagement() {
       type: 'actions',
       headerName: 'عملیات',
       width: 120,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={
-            <Tooltip title="ویرایش">
-              <EditIcon />
-            </Tooltip>
-          }
-          label="ویرایش"
-          onClick={() => handleOpenDialog(params.row)}
-          color="primary"
-        />,
-        <GridActionsCellItem
-          icon={
-            <Tooltip title="حذف">
-              <DeleteIcon />
-            </Tooltip>
-          }
-          label="حذف"
-          onClick={() => handleDelete(params.id)}
-          color="error"
-        />
-      ]
+      getActions: (params) => {
+        if (!isAdmin(currentUser)) return [];
+        return [
+          <GridActionsCellItem
+            icon={
+              <Tooltip title="ویرایش">
+                <EditIcon />
+              </Tooltip>
+            }
+            label="ویرایش"
+            onClick={() => handleOpenDialog(params.row)}
+            color="primary"
+          />,
+          <GridActionsCellItem
+            icon={
+              <Tooltip title="حذف">
+                <DeleteIcon />
+              </Tooltip>
+            }
+            label="حذف"
+            onClick={() => handleDelete(params.id)}
+            color="error"
+          />
+        ];
+      }
     }
   ];
 
@@ -229,18 +235,20 @@ function ConsumerManagement() {
           <Typography variant="h5" fontWeight="bold" color="secondary">
             مدیریت مصرف‌کنندگان
           </Typography>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            sx={{
-              background: 'linear-gradient(45deg, #9C27B0 30%, #E040FB 90%)',
-              boxShadow: '0 3px 5px 2px rgba(156, 39, 176, .3)'
-            }}
-          >
-            افزودن مصرف‌کننده
-          </Button>
+          {isAdmin(currentUser) && (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{
+                background: 'linear-gradient(45deg, #9C27B0 30%, #E040FB 90%)',
+                boxShadow: '0 3px 5px 2px rgba(156, 39, 176, .3)'
+              }}
+            >
+              افزودن مصرف‌کننده
+            </Button>
+          )}
         </Box>
 
         <Box sx={{ height: 600, width: '100%' }}>

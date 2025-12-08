@@ -11,8 +11,11 @@ import WarehouseIcon from '@mui/icons-material/Warehouse';
 import SearchIcon from '@mui/icons-material/Search';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { isAdmin } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
 
 function WarehouseManagement() {
+  const currentUser = useCurrentUser();
   const [warehouses, setWarehouses] = useState([]);
   const [filteredWarehouses, setFilteredWarehouses] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -126,18 +129,21 @@ function WarehouseManagement() {
       type: 'actions',
       headerName: 'عملیات',
       width: 120,
-      getActions: (params) => [
-        <GridActionsCellItem
-          icon={<EditIcon color="primary" />}
-          label="ویرایش"
-          onClick={() => handleEdit(params.row)}
-        />,
-        <GridActionsCellItem
-          icon={<DeleteIcon color="error" />}
-          label="حذف"
-          onClick={() => handleDelete(params.row.id)}
-        />
-      ]
+      getActions: (params) => {
+        if (!isAdmin(currentUser)) return [];
+        return [
+          <GridActionsCellItem
+            icon={<EditIcon color="primary" />}
+            label="ویرایش"
+            onClick={() => handleEdit(params.row)}
+          />,
+          <GridActionsCellItem
+            icon={<DeleteIcon color="error" />}
+            label="حذف"
+            onClick={() => handleDelete(params.row.id)}
+          />
+        ];
+      }
     }
   ];
 
@@ -151,14 +157,16 @@ function WarehouseManagement() {
               مدیریت انبارها
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{ fontWeight: 'bold' }}
-          >
-            افزودن انبار جدید
-          </Button>
+          {isAdmin(currentUser) && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{ fontWeight: 'bold' }}
+            >
+              افزودن انبار جدید
+            </Button>
+          )}
         </Box>
 
         {/* Search Field */}

@@ -13,9 +13,15 @@ import { API_BASE_URL, getWarehouses, getDrugs, getInventory, getConsumers } fro
 import moment from 'jalali-moment';
 import TransferDialog from './TransferDialog';
 import { getExpirationColor } from '../utils/expirationUtils';
+import { canEdit, filterWarehousesByAccess } from '../utils/permissions';
+import { useCurrentUser } from '../utils/useCurrentUser';
+import { useSettings } from '../utils/SettingsContext';
 
 function TransferForm() {
+  const currentUser = useCurrentUser();
+  const { settings } = useSettings();
   const [warehouses, setWarehouses] = useState([]);
+  const [allWarehouses, setAllWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [consumers, setConsumers] = useState([]);
@@ -30,42 +36,60 @@ function TransferForm() {
   const [editingTransfer, setEditingTransfer] = useState(null);
 
   useEffect(() => {
-    fetchData();
+    const storedUser = JSON.parse(localStorage.getItem('user'));
+    setUser(storedUser);
+    fetchTransfers(); // Load transfers first (most important)
+    fetchBasicData(); // Load warehouses and drugs in background
   }, []);
 
-  const fetchData = async () => {
+  const fetchTransfers = async () => {
     setLoading(true);
     try {
-      const storedUser = JSON.parse(localStorage.getItem('user'));
-      setUser(storedUser);
-
-      const [whRes, drugRes, invRes, consRes, transRes] = await Promise.all([
-        getWarehouses(),
-        getDrugs(),
-        getInventory(),
-        getConsumers(),
-        axios.get(`${API_BASE_URL}/transfer/all`)
-      ]);
-      
-      let allWarehouses = whRes.data;
-      if (storedUser && storedUser.access_level === 'warehouseman' && storedUser.warehouses) {
-           allWarehouses = allWarehouses.filter(w => storedUser.warehouses.includes(w.id));
-      }
-      setWarehouses(allWarehouses);
-
-      setDrugs(drugRes.data);
-      setInventory(invRes.data);
-      setConsumers(consRes.data);
+      const transRes = await axios.get(`${API_BASE_URL}/transfer/all`);
       setTransfers(transRes.data);
     } catch (err) {
-      console.error("Error fetching data", err);
+      console.error("Error fetching transfers", err);
     }
     setLoading(false);
+  };
+
+  const fetchBasicData = async () => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      const [whRes, drugRes] = await Promise.all([
+        getWarehouses(),
+        getDrugs()
+      ]);
+      
+      setAllWarehouses(whRes.data); // ذخیره همه انبارها برای TransferDialog
+      setWarehouses(filterWarehousesByAccess(whRes.data, storedUser)); // فیلتر شده برای نمایش
+      setDrugs(drugRes.data);
+    } catch (err) {
+      console.error("Error fetching basic data", err);
+    }
+  };
+
+  const fetchData = async () => {
+    // Only load heavy data when dialog opens
+    try {
+      const [invRes, consRes] = await Promise.all([
+        getInventory(),
+        getConsumers()
+      ]);
+      setInventory(invRes.data);
+      setConsumers(consRes.data);
+    } catch (err) {
+      console.error("Error fetching inventory data", err);
+    }
   };
 
   const handleOpenNewDialog = () => {
     setEditingTransfer(null);
     setDialogOpen(true);
+    // Load inventory and consumers only when dialog opens
+    if (inventory.length === 0 || consumers.length === 0) {
+      fetchData();
+    }
   };
 
   const handleCloseDialog = () => {
@@ -79,7 +103,7 @@ function TransferForm() {
       setMessage('حواله با موفقیت ثبت شد');
       setMessageType('success');
       setTimeout(() => setMessage(''), 3000);
-      fetchData();
+      fetchTransfers(); // Only refresh transfers, not all data
       handleCloseDialog();
     } catch (err) {
       setMessage(err.response?.data?.detail || 'خطا در ثبت حواله');
@@ -95,7 +119,7 @@ function TransferForm() {
       setMessage('حواله با موفقیت تایید شد');
       setMessageType('success');
       setTimeout(() => setMessage(''), 3000);
-      fetchData();
+      fetchTransfers();
     } catch (err) {
       setMessage(err.response?.data?.detail || 'خطا در تایید حواله');
       setMessageType('error');
@@ -110,7 +134,7 @@ function TransferForm() {
       setMessage('حواله با موفقیت رد شد');
       setMessageType('success');
       setTimeout(() => setMessage(''), 3000);
-      fetchData();
+      fetchTransfers();
     } catch (err) {
       setMessage(err.response?.data?.detail || 'خطا در رد حواله');
       setMessageType('error');
@@ -134,7 +158,7 @@ function TransferForm() {
       setMessage('حواله با موفقیت حذف شد');
       setMessageType('success');
       setTimeout(() => setMessage(''), 3000);
-      fetchData();
+      fetchTransfers();
     } catch (err) {
       setMessage(err.response?.data?.detail || 'خطا در حذف حواله');
       setMessageType('error');
@@ -150,8 +174,7 @@ function TransferForm() {
       flex: 1,
       minWidth: 150, 
       valueGetter: (params) => {
-        const drug = drugs.find(d => d.id === params.row.drug_id);
-        return drug ? drug.name : '-';
+        return params.row.drug?.name || '-';
       }
     },
     { 
@@ -160,8 +183,7 @@ function TransferForm() {
       flex: 1,
       minWidth: 120, 
       valueGetter: (params) => {
-        const wh = warehouses.find(w => w.id === params.row.source_warehouse_id);
-        return wh ? wh.name : '-';
+        return params.row.source_warehouse?.name || '-';
       }
     },
     { 
@@ -171,11 +193,9 @@ function TransferForm() {
       minWidth: 120, 
       valueGetter: (params) => {
         if (params.row.transfer_type === 'warehouse') {
-          const wh = warehouses.find(w => w.id === params.row.destination_warehouse_id);
-          return wh ? wh.name : '-';
+          return params.row.destination_warehouse?.name || '-';
         } else {
-          const cons = consumers.find(c => c.id === params.row.consumer_id);
-          return cons ? cons.name : '-';
+          return params.row.consumer?.name || '-';
         }
       }
     },
@@ -187,7 +207,7 @@ function TransferForm() {
       renderCell: (params) => (
         <Chip 
           label={params.value} 
-          color={getExpirationColor(params.value)}
+          color={getExpirationColor(params.value, settings.exp_warning_days)}
           size="small"
           sx={{ fontWeight: 'bold' }}
         />
@@ -214,6 +234,8 @@ function TransferForm() {
       headerName: 'عملیات',
       width: 180,
       renderCell: (params) => {
+        if (!canEdit(currentUser)) return null;
+        
         const isPending = params.row.status === 'pending';
         const isWarehouseTransfer = params.row.transfer_type === 'warehouse';
         
@@ -261,15 +283,17 @@ function TransferForm() {
           <Typography variant="h5" fontWeight="bold" color="secondary" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
             📤 مدیریت حواله‌های خروجی
           </Typography>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenNewDialog}
-            sx={{ fontWeight: 'bold' }}
-          >
-            ثبت حواله جدید
-          </Button>
+          {canEdit(currentUser) && (
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenNewDialog}
+              sx={{ fontWeight: 'bold' }}
+            >
+              ثبت حواله جدید
+            </Button>
+          )}
         </Box>
         
         {message && (
@@ -302,12 +326,13 @@ function TransferForm() {
       <TransferDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
-        warehouses={warehouses}
+        warehouses={allWarehouses}
         drugs={drugs}
         inventory={inventory}
         consumers={consumers}
         onSubmit={handleSubmitDialog}
         editData={editingTransfer}
+        currentUser={currentUser}
       />
     </Box>
   );

@@ -8,7 +8,7 @@ export const API_BASE_URL = BASE_URL;
 export const register = (data) => axios.post(`${BASE_URL}/register`, null, { params: data });
 export const login = (data) => axios.post(`${BASE_URL}/login`, null, { params: data });
 export const recoverPassword = (data) => axios.post(`${BASE_URL}/recover-password`, null, { params: data });
-export const backupDB = () => axios.post(`${BASE_URL}/backup-db`);
+export const backupDB = () => axios.get(`${BASE_URL}/backup-db`);
 export const getExpiringDrugs = () => axios.get(`${BASE_URL}/expiring-drugs`);
 // سایر API ها را به همین صورت اضافه کنید
 
@@ -33,7 +33,12 @@ export const getUsers = () => axios.get(`${BASE_URL}/users`);
 export const addUser = (data) => axios.post(`${BASE_URL}/users`, data);
 export const updateUser = (id, data) => axios.put(`${BASE_URL}/users/${id}`, data);
 export const deleteUser = (id) => axios.delete(`${BASE_URL}/users/${id}`);
-export const changePassword = (data) => axios.post(`${BASE_URL}/change-password`, data);
+export const changePassword = (data) => {
+  const token = localStorage.getItem('token');
+  return axios.post(`${BASE_URL}/change-password`, data, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+};
 
 export const getSettings = () => axios.get(`${BASE_URL}/settings`);
 export const updateSettings = (data) => axios.post(`${BASE_URL}/settings`, data);

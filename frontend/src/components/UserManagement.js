@@ -17,6 +17,10 @@ function UserManagement() {
   const [editMode, setEditMode] = useState(false);
   const [currentUser, setCurrentUser] = useState({ username: '', password: '', full_name: '', access_level: 'viewer', warehouses: [] });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  
+  // Get logged-in user
+  const loggedInUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isSuperAdmin = loggedInUser.username === 'superadmin';
 
   useEffect(() => {
     loadUsers();
@@ -90,6 +94,9 @@ function UserManagement() {
       width: 100,
       getActions: (params) => {
         const isSuperAdmin = params.row.username === 'superadmin';
+        const isAdmin = params.row.username === 'admin';
+        const cannotDelete = isSuperAdmin || isAdmin;
+        
         return [
           <GridActionsCellItem
             icon={<EditIcon color={isSuperAdmin ? "disabled" : "primary"} />}
@@ -104,10 +111,10 @@ function UserManagement() {
             disabled={isSuperAdmin}
           />,
           <GridActionsCellItem
-            icon={<DeleteIcon color={isSuperAdmin ? "disabled" : "error"} />}
-            label={isSuperAdmin ? "غیرقابل حذف" : "حذف"}
-            onClick={() => !isSuperAdmin && handleDelete(params.row.id)}
-            disabled={isSuperAdmin}
+            icon={<DeleteIcon color={cannotDelete ? "disabled" : "error"} />}
+            label={cannotDelete ? (isAdmin ? "ادمین قابل حذف نیست" : "غیرقابل حذف") : "حذف"}
+            onClick={() => !cannotDelete && handleDelete(params.row.id)}
+            disabled={cannotDelete}
           />
         ];
       }
@@ -164,8 +171,17 @@ function UserManagement() {
             margin="normal"
             value={currentUser.password}
             onChange={e => setCurrentUser({ ...currentUser, password: e.target.value })}
-            disabled={editMode && currentUser.username === 'superadmin'}
-            helperText={editMode && currentUser.username === 'superadmin' ? "رمز عبور مدیر کل قابل تغییر نیست" : ""}
+            disabled={
+              (editMode && currentUser.username === 'superadmin') || 
+              (editMode && currentUser.username === 'admin' && !isSuperAdmin && loggedInUser.username !== 'admin')
+            }
+            helperText={
+              editMode && currentUser.username === 'superadmin' 
+                ? "رمز عبور مدیر کل قابل تغییر نیست" 
+                : editMode && currentUser.username === 'admin' && !isSuperAdmin && loggedInUser.username !== 'admin'
+                ? "فقط سوپر ادمین یا خود ادمین می‌تواند رمز ادمین را تغییر دهد"
+                : ""
+            }
           />
           <TextField
             label="نام کامل"
@@ -184,7 +200,6 @@ function UserManagement() {
             onChange={e => setCurrentUser({ ...currentUser, access_level: e.target.value })}
             disabled={editMode && currentUser.username === 'superadmin'}
           >
-            <MenuItem value="superadmin">مدیر کل (Super Admin)</MenuItem>
             <MenuItem value="admin">مدیر (Admin)</MenuItem>
             <MenuItem value="warehouseman">انباردار</MenuItem>
             <MenuItem value="viewer">مشاهده‌گر</MenuItem>

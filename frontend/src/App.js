@@ -11,6 +11,7 @@ import SettingsPanel from './components/SettingsPanel';
 import ReportExport from './components/ReportExport';
 import ComprehensiveReports from './components/ComprehensiveReports';
 import OperationLogPanel from './components/OperationLogPanel';
+import DisposedDrugsPanel from './components/DisposedDrugsPanel';
 import UserManagement from './components/UserManagement';
 import AuthForm from './components/AuthForm';
 import BackupPanel from './components/BackupPanel';
@@ -21,6 +22,7 @@ import ProfessionalSidebar from './components/ProfessionalSidebar';
 import WarehouseManagement from './components/WarehouseManagement';
 import InventoryMatrix from './components/InventoryMatrix';
 import ExpiringDrugsCard from './components/ExpiringDrugsCard';
+import { SettingsProvider } from './utils/SettingsContext';
 
 const drawerWidth = 280;
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -106,17 +108,18 @@ function App() {
   }
 
   return (
-    <Router>
-      <CssBaseline />
-      <Box sx={{ display: 'flex', direction: 'rtl' }}>
-        <AppBar
-          position="fixed"
-          sx={{
-            width: { sm: `calc(100% - ${collapsed ? 80 : drawerWidth}px)` },
-            display: { sm: 'none' }, // Only show on mobile
-            transition: 'width 0.3s, margin 0.3s',
-          }}
-        >
+    <SettingsProvider>
+      <Router>
+        <CssBaseline />
+        <Box sx={{ display: 'flex', direction: 'rtl' }}>
+          <AppBar
+            position="fixed"
+            sx={{
+              width: { sm: `calc(100% - ${collapsed ? 80 : drawerWidth}px)` },
+              display: { sm: 'none' }, // Only show on mobile
+              transition: 'width 0.3s, margin 0.3s',
+            }}
+          >
           <Toolbar>
             <IconButton
               color="inherit"
@@ -174,12 +177,14 @@ function App() {
             <Route path="/report-export" element={<ReportExport />} />
             <Route path="/report-expired" element={<ExpiringDrugsCard />} />
             <Route path="/logs" element={<OperationLogPanel />} />
+            <Route path="/disposed" element={<DisposedDrugsPanel />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/backup" element={<BackupPanel />} />
           </Routes>
         </Box>
       </Box>
     </Router>
+    </SettingsProvider>
   );
 }
 
