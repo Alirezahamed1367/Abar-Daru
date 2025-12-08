@@ -54,3 +54,6 @@ test_professional.pdf
 
 # Images cache
 backend/images/
+backend/pharmacy.db
+backend/pharmacy.db
+backend/*.db
