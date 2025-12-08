@@ -13,7 +13,23 @@ def get_ip_address():
     except Exception:
         return "127.0.0.1"
 
+def run_migrations():
+    """Run database migrations before starting server"""
+    backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend')
+    sys.path.insert(0, backend_dir)
+    
+    try:
+        print("🔄 Running database migrations...")
+        from migrate_db import migrate
+        migrate()
+        print("✅ Migrations completed\n")
+    except Exception as e:
+        print(f"⚠️  Migration warning: {e}\n")
+
 if __name__ == "__main__":
+    # Run migrations first
+    run_migrations()
+    
     # Change directory to backend to ensure imports work
     backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backend')
     if os.path.exists(backend_dir):

@@ -1,39 +1,79 @@
 import sqlite3
+import os
 
 def migrate():
-    conn = sqlite3.connect('pharmacy.db')
+    # Use absolute path to database in project root
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(base_dir, 'pharmacy.db')
+    
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    
+    print(f"Running migrations on: {db_path}")
+    
+    try:
+        # Add has_expiry_date column to drugs table
+        cursor.execute("ALTER TABLE drugs ADD COLUMN has_expiry_date BOOLEAN DEFAULT 1")
+        print("✅ Added has_expiry_date column to drugs table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column has_expiry_date might already exist: {e}")
+    
+    try:
+        # Add image_data column to drugs table
+        cursor.execute("ALTER TABLE drugs ADD COLUMN image_data TEXT")
+        print("✅ Added image_data column to drugs table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column image_data might already exist: {e}")
+    
+    try:
+        # Add is_virtual column to warehouses table
+        cursor.execute("ALTER TABLE warehouses ADD COLUMN is_virtual BOOLEAN DEFAULT 0")
+        print("✅ Added is_virtual column to warehouses table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column is_virtual might already exist: {e}")
     
     try:
         # Add consumer_id column to transfers table
         cursor.execute("ALTER TABLE transfers ADD COLUMN consumer_id INTEGER REFERENCES consumers(id)")
-        print("Added consumer_id column to transfers table")
+        print("✅ Added consumer_id column to transfers table")
     except sqlite3.OperationalError as e:
-        print(f"Column consumer_id might already exist: {e}")
+        print(f"⚠️  Column consumer_id might already exist: {e}")
 
     try:
         # Add transfer_type column to transfers table
         cursor.execute("ALTER TABLE transfers ADD COLUMN transfer_type VARCHAR DEFAULT 'warehouse'")
-        print("Added transfer_type column to transfers table")
+        print("✅ Added transfer_type column to transfers table")
     except sqlite3.OperationalError as e:
-        print(f"Column transfer_type might already exist: {e}")
+        print(f"⚠️  Column transfer_type might already exist: {e}")
 
     try:
         # Add entry_date column to inventory table
         cursor.execute("ALTER TABLE inventory ADD COLUMN entry_date VARCHAR")
-        print("Added entry_date column to inventory table")
+        print("✅ Added entry_date column to inventory table")
     except sqlite3.OperationalError as e:
-        print(f"Column entry_date might already exist: {e}")
+        print(f"⚠️  Column entry_date might already exist: {e}")
 
     try:
         # Add transfer_date column to transfers table
         cursor.execute("ALTER TABLE transfers ADD COLUMN transfer_date VARCHAR")
-        print("Added transfer_date column to transfers table")
+        print("✅ Added transfer_date column to transfers table")
     except sqlite3.OperationalError as e:
-        print(f"Column transfer_date might already exist: {e}")
+        print(f"⚠️  Column transfer_date might already exist: {e}")
+    
+    try:
+        # Add is_disposed column to inventory table
+        cursor.execute("ALTER TABLE inventory ADD COLUMN is_disposed BOOLEAN DEFAULT 0")
+        print("✅ Added is_disposed column to inventory table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column is_disposed might already exist: {e}")
 
     conn.commit()
     conn.close()
+    print("\n🎉 Migration completed successfully!")
+    print(f"Database: {db_path}")
+    
+if __name__ == "__main__":
+    migrate()
 
 if __name__ == "__main__":
     migrate()

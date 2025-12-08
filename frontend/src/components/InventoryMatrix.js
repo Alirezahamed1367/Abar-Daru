@@ -169,7 +169,6 @@ function InventoryMatrix() {
           rows={matrixData}
           columns={columns}
           loading={loading}
-          autoHeight
           pageSize={25}
           rowsPerPageOptions={[25, 50, 100]}
           disableSelectionOnClick
@@ -179,9 +178,13 @@ function InventoryMatrix() {
           }}
           sx={{ 
             direction: 'rtl',
+            height: 600,
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: 'primary.lighter',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10
             },
             '& .MuiDataGrid-columnSeparator': {
               visibility: 'visible'

@@ -5,6 +5,33 @@ const hostname = window.location.hostname;
 const BASE_URL = `http://${hostname}:8000/api`;
 export const API_BASE_URL = BASE_URL;
 
+// Add token to all requests automatically
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle 401 errors globally
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const register = (data) => axios.post(`${BASE_URL}/register`, null, { params: data });
 export const login = (data) => axios.post(`${BASE_URL}/login`, null, { params: data });
 export const recoverPassword = (data) => axios.post(`${BASE_URL}/recover-password`, null, { params: data });
