@@ -1787,7 +1787,7 @@ def change_password(data: dict, authorization: str = Header(None), db: Session =
     token = authorization.replace('Bearer ', '')
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get('sub')
+        username = payload.get('username')  # Fixed: Changed from 'sub' to 'username'
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
     except jwt.ExpiredSignatureError:

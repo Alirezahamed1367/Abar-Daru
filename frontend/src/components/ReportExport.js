@@ -193,11 +193,11 @@ function ReportExport() {
       </Paper>
 
       <Paper elevation={3} sx={{ p: 3 }}>
-        <DataGrid
-          rows={reportData}
-          columns={columns}
-          autoHeight
-          pageSize={10}
+        <Box sx={{ height: 600, width: '100%' }}>
+          <DataGrid
+            rows={reportData}
+            columns={columns}
+            pageSize={10}
           rowsPerPageOptions={[10, 25, 50]}
           disableSelectionOnClick
           getRowClassName={(params) => {
@@ -211,6 +211,12 @@ function ReportExport() {
           }}
           sx={{ 
             direction: 'rtl',
+            '& .MuiDataGrid-columnHeaders': {
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'background.paper',
+            },
             '& .row-expired': {
               bgcolor: '#ffebee',
               '&:hover': { bgcolor: '#ffcdd2' }
@@ -225,6 +231,7 @@ function ReportExport() {
             },
           }}
         />
+        </Box>
       </Paper>
     </Box>
   );

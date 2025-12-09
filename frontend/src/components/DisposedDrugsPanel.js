@@ -139,11 +139,32 @@ function DisposedDrugsPanel() {
               localeText={faIR.components.MuiDataGrid.defaultProps.localeText}
               disableSelectionOnClick
               sx={{
+                '& .MuiDataGrid-columnHeaders': {
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 1,
+                  backgroundColor: 'background.paper',
+                },
                 '& .MuiDataGrid-row:hover': {
                   backgroundColor: '#ffebee'
                 },
                 '& .MuiDataGrid-cell': {
                   borderBottom: '1px solid #f0f0f0'
+                }
+              }}
+              components={{
+                Footer: () => {
+                  const totalQuantity = disposedDrugs.reduce((sum, row) => sum + (row.quantity || 0), 0);
+                  return (
+                    <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f5f5f5', borderTop: '2px solid #d32f2f' }}>
+                      <Typography variant="body1" fontWeight="bold">
+                        جمع کل: {disposedDrugs.length} ردیف
+                      </Typography>
+                      <Typography variant="body1" fontWeight="bold" color="error.main">
+                        مجموع تعداد: {totalQuantity.toLocaleString('fa-IR')} عدد
+                      </Typography>
+                    </Box>
+                  );
                 }
               }}
             />

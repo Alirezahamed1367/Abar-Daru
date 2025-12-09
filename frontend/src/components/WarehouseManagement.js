@@ -210,6 +210,12 @@ function WarehouseManagement() {
           rowsPerPageOptions={[10, 25, 50]}
           disableSelectionOnClick
           sx={{
+            '& .MuiDataGrid-columnHeaders': {
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'background.paper',
+            },
             '& .MuiDataGrid-root': { direction: 'rtl' },
             '& .MuiDataGrid-cell': { textAlign: 'right' },
             '& .MuiDataGrid-columnHeader': { textAlign: 'right' }

@@ -163,7 +163,15 @@ function UserManagement() {
           autoHeight
           pageSize={10}
           disableSelectionOnClick
-          sx={{ direction: 'rtl' }}
+          sx={{ 
+            direction: 'rtl',
+            '& .MuiDataGrid-columnHeaders': {
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'background.paper',
+            }
+          }}
         />
       </Paper>
 

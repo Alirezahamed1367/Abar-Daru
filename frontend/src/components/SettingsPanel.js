@@ -59,7 +59,17 @@ function SettingsPanel() {
       setOldPassword('');
       setNewPassword('');
     } catch (err) {
-      setMessage(err.response?.data?.detail || 'خطا در تغییر رمز عبور');
+      console.error('Password change error:', err);
+      console.error('Error response:', err.response);
+      let errorMsg = 'خطا در تغییر رمز عبور';
+      if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      } else if (err.response?.data) {
+        errorMsg = JSON.stringify(err.response.data);
+      } else if (err.message) {
+        errorMsg = `خطا: ${err.message}`;
+      }
+      setMessage(errorMsg);
       setSeverity('error');
     }
   };

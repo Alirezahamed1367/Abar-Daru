@@ -90,20 +90,42 @@ function ExpiringDrugsCard() {
           </Typography>
         </Box>
         
-        <DataGrid
-          rows={drugs.map((d, i) => ({ ...d, id: i }))}
-          columns={columns}
-          autoHeight
-          pageSize={10}
+        <Box sx={{ height: 600, width: '100%' }}>
+          <DataGrid
+            rows={drugs.map((d, i) => ({ ...d, id: i }))}
+            columns={columns}
+            pageSize={10}
           rowsPerPageOptions={[10, 20, 50]}
           disableSelectionOnClick
           sx={{ 
             direction: 'rtl',
+            '& .MuiDataGrid-columnHeaders': {
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'background.paper',
+            },
             '& .MuiDataGrid-columnSeparator': {
               visibility: 'visible',
             },
           }}
+          components={{
+            Footer: () => {
+              const totalQuantity = drugs.reduce((sum, row) => sum + (row.quantity || 0), 0);
+              return (
+                <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f5f5f5', borderTop: '2px solid #ed6c02' }}>
+                  <Typography variant="body1" fontWeight="bold">
+                    جمع کل: {drugs.length} ردیف
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold" color="warning.main">
+                    مجموع تعداد: {totalQuantity.toLocaleString('fa-IR')} عدد
+                  </Typography>
+                </Box>
+              );
+            }
+          }}
         />
+        </Box>
       </Paper>
     </Box>
   );

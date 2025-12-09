@@ -618,6 +618,12 @@ function TransferList() {
             getRowId={(row) => row.id}
             localeText={faIR.components.MuiDataGrid.defaultProps.localeText}
             sx={{
+              '& .MuiDataGrid-columnHeaders': {
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+                backgroundColor: 'background.paper',
+              },
               '& .MuiDataGrid-row:hover': {
                 backgroundColor: 'action.hover',
               },

@@ -515,6 +515,12 @@ function ComprehensiveReports() {
             }}
             sx={{ 
               bgcolor: 'white',
+              '& .MuiDataGrid-columnHeaders': {
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+                backgroundColor: 'background.paper',
+              },
               '& .row-expired': {
                 bgcolor: '#ffebee',
                 '&:hover': { bgcolor: '#ffcdd2' }
@@ -530,6 +536,26 @@ function ComprehensiveReports() {
               '& .MuiDataGrid-columnSeparator': {
                 visibility: 'visible',
               },
+              '& .MuiDataGrid-footerContainer': {
+                backgroundColor: '#f5f5f5',
+                borderTop: '2px solid #1976d2',
+                fontWeight: 'bold',
+              },
+            }}
+            components={{
+              Footer: () => {
+                const totalQuantity = safeReportData.reduce((sum, row) => sum + (row.quantity || 0), 0);
+                return (
+                  <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f5f5f5', borderTop: '2px solid #1976d2' }}>
+                    <Typography variant="body1" fontWeight="bold">
+                      جمع کل: {safeReportData.length} ردیف
+                    </Typography>
+                    <Typography variant="body1" fontWeight="bold" color="primary.main">
+                      مجموع تعداد: {totalQuantity.toLocaleString('fa-IR')} عدد
+                    </Typography>
+                  </Box>
+                );
+              }
             }}
           />
         </TabPanel>
@@ -558,6 +584,12 @@ function ComprehensiveReports() {
             disableSelectionOnClick
             sx={{ 
               bgcolor: 'white',
+              '& .MuiDataGrid-columnHeaders': {
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
+                backgroundColor: 'background.paper',
+              },
               '& .MuiDataGrid-columnSeparator': {
                 visibility: 'visible',
               },

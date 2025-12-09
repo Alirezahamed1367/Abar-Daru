@@ -386,11 +386,11 @@ function DrugManagement() {
           />
         </Box>
 
-        <DataGrid
-          rows={filteredDrugs}
-          columns={columns}
-          loading={loading}
-          autoHeight
+        <Box sx={{ height: 600, width: '100%' }}>
+          <DataGrid
+            rows={filteredDrugs}
+            columns={columns}
+            loading={loading}
           pagination
           initialState={{
             pagination: {
@@ -404,11 +404,18 @@ function DrugManagement() {
           disableSelectionOnClick
           sx={{
             direction: 'rtl',
+            '& .MuiDataGrid-columnHeaders': {
+              position: 'sticky',
+              top: 0,
+              zIndex: 1,
+              backgroundColor: 'background.paper',
+            },
             '& .MuiDataGrid-root': { direction: 'rtl' },
             '& .MuiDataGrid-cell': { textAlign: 'right', direction: 'rtl' },
             '& .MuiDataGrid-columnHeader': { textAlign: 'right', direction: 'rtl' }
           }}
         />
+        </Box>
       </Paper>
 
       {/* Dialog افزودن/ویرایش */}

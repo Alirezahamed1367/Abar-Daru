@@ -281,12 +281,15 @@ function SupplierManagement() {
             getRowId={(row) => row.id}
             disableSelectionOnClick
             sx={{
-              '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid #f0f0f0'
-              },
               '& .MuiDataGrid-columnHeaders': {
+                position: 'sticky',
+                top: 0,
+                zIndex: 1,
                 backgroundColor: '#f5f5f5',
                 fontWeight: 'bold'
+              },
+              '& .MuiDataGrid-cell': {
+                borderBottom: '1px solid #f0f0f0'
               }
             }}
           />
