@@ -7,7 +7,7 @@ import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationU
 import { useSettings } from '../utils/SettingsContext';
 
 function InventoryMatrix() {
-  const { settings } = useSettings();
+  const { settings, loading: settingsLoading } = useSettings();
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
   const [inventory, setInventory] = useState([]);

@@ -34,8 +34,29 @@ function App() {
   const [collapsed, setCollapsed] = useState(false);
 
   const handleLogin = (loggedInUser) => {
-    setUser(loggedInUser);
-    localStorage.setItem('user', JSON.stringify(loggedInUser));
+    // Backend returns: { id, username, full_name, access_level, warehouses, token }
+    // We need to save token separately and user without token
+    console.log('Login successful:', loggedInUser);
+    
+    if (loggedInUser.token) {
+      localStorage.setItem('token', loggedInUser.token);
+      console.log('Token saved to localStorage');
+    } else {
+      console.error('No token in login response!');
+    }
+    
+    // Save user data without token
+    const userData = {
+      id: loggedInUser.id,
+      username: loggedInUser.username,
+      full_name: loggedInUser.full_name,
+      access_level: loggedInUser.access_level,
+      warehouses: loggedInUser.warehouses || []
+    };
+    
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+    console.log('User data saved:', userData);
   };
 
   const handleLogout = useCallback(() => {

@@ -14,13 +14,19 @@ function ExpiringDrugsCard() {
     const fetchData = async () => {
       try {
         const drugsRes = await getExpiringDrugs();
-        setDrugs(drugsRes.data);
+        // فیلتر کردن: فقط داروهای منقضی شده یا در آستانه انقضا
+        const filteredDrugs = drugsRes.data.filter(drug => {
+          const days = getDaysUntilExpiration(drug.expire);
+          // فقط داروهایی که منقضی شده‌اند یا کمتر از exp_warning_days مانده
+          return days !== null && days < settings.exp_warning_days;
+        });
+        setDrugs(filteredDrugs);
       } catch (err) {
         console.error(err);
       }
     };
     fetchData();
-  }, []);
+  }, [settings.exp_warning_days]);
 
   const getStatusLabel = (expireDate) => {
     const days = getDaysUntilExpiration(expireDate);

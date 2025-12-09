@@ -99,6 +99,11 @@ function TransferForm() {
 
   const handleSubmitDialog = async (data) => {
     try {
+      console.log('=== TRANSFER SUBMIT ===');
+      console.log('Data to send:', data);
+      console.log('Token from localStorage:', localStorage.getItem('token')?.substring(0, 30) + '...');
+      console.log('User from localStorage:', localStorage.getItem('user'));
+      
       await axios.post(`${API_BASE_URL}/transfer/create`, null, { params: data });
       setMessage('حواله با موفقیت ثبت شد');
       setMessageType('success');
@@ -106,9 +111,35 @@ function TransferForm() {
       fetchTransfers(); // Only refresh transfers, not all data
       handleCloseDialog();
     } catch (err) {
-      setMessage(err.response?.data?.detail || 'خطا در ثبت حواله');
+      console.error('Transfer creation error:', err.response?.data);
+      
+      // Handle different error formats
+      let errorMessage = 'خطا در ثبت حواله';
+      
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        
+        // If detail is a string
+        if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        }
+        // If detail is an array (validation errors)
+        else if (Array.isArray(errorData.detail)) {
+          errorMessage = errorData.detail.map(e => e.msg || e).join(', ');
+        }
+        // If detail is an object
+        else if (typeof errorData.detail === 'object') {
+          errorMessage = JSON.stringify(errorData.detail);
+        }
+        // If there's a message field
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      }
+      
+      setMessage(errorMessage);
       setMessageType('error');
-      setTimeout(() => setMessage(''), 3000);
+      setTimeout(() => setMessage(''), 5000); // Show error for 5 seconds
     }
   };
 
@@ -121,7 +152,16 @@ function TransferForm() {
       setTimeout(() => setMessage(''), 3000);
       fetchTransfers();
     } catch (err) {
-      setMessage(err.response?.data?.detail || 'خطا در تایید حواله');
+      console.error('Transfer confirm error:', err.response?.data);
+      let errorMessage = 'خطا در تایید حواله';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }
@@ -136,7 +176,16 @@ function TransferForm() {
       setTimeout(() => setMessage(''), 3000);
       fetchTransfers();
     } catch (err) {
-      setMessage(err.response?.data?.detail || 'خطا در رد حواله');
+      console.error('Transfer reject error:', err.response?.data);
+      let errorMessage = 'خطا در رد حواله';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }
@@ -160,7 +209,16 @@ function TransferForm() {
       setTimeout(() => setMessage(''), 3000);
       fetchTransfers();
     } catch (err) {
-      setMessage(err.response?.data?.detail || 'خطا در حذف حواله');
+      console.error('Transfer delete error:', err.response?.data);
+      let errorMessage = 'خطا در حذف حواله';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }

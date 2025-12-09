@@ -14,8 +14,17 @@ function DrugForm() {
     try {
       await addDrug({ name, dose, package_type: packageType, description });
       setMessage('دارو با موفقیت ثبت شد');
-    } catch {
-      setMessage('خطا در ثبت دارو');
+    } catch (err) {
+      console.error('Drug creation error:', err.response?.data);
+      let errorMessage = 'خطا در ثبت دارو';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
     }
   };
 

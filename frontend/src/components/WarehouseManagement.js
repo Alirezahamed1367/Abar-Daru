@@ -80,7 +80,16 @@ function WarehouseManagement() {
       loadWarehouses();
       handleCloseDialog();
     } catch (error) {
-      showSnackbar(error.response?.data?.detail || 'خطا در ذخیره‌سازی', 'error');
+      console.error('Save warehouse error:', error);
+      let errorMessage = 'خطا در ذخیره‌سازی';
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        } else if (Array.isArray(error.response.data.detail)) {
+          errorMessage = error.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      showSnackbar(errorMessage, 'error');
     }
   };
 
@@ -92,7 +101,12 @@ function WarehouseManagement() {
       showSnackbar('انبار با موفقیت حذف شد', 'success');
       loadWarehouses();
     } catch (error) {
-      showSnackbar('خطا در حذف انبار', 'error');
+      console.error('Delete warehouse error:', error);
+      let errorMessage = 'خطا در حذف انبار';
+      if (error.response?.data?.detail && typeof error.response.data.detail === 'string') {
+        errorMessage = error.response.data.detail;
+      }
+      showSnackbar(errorMessage, 'error');
     }
   };
 

@@ -45,7 +45,7 @@ export const changePassword = (data) => {
 export const getSettings = () => axios.get(`${BASE_URL}/settings`);
 export const updateSettings = (data) => axios.post(`${BASE_URL}/settings`, data);
 
-export const getTransfers = () => axios.get(`${BASE_URL}/transfer`);
+export const getTransfers = () => axios.get(`${BASE_URL}/transfer/all`);
 export const createTransfer = (data) => axios.post(`${BASE_URL}/transfer`, data);
 export const confirmTransfer = (id, quantity_received) => axios.post(`${BASE_URL}/transfer/${id}/confirm`, null, { params: { quantity_received } });
 export const rejectTransfer = (id) => axios.post(`${BASE_URL}/transfer/${id}/reject`);

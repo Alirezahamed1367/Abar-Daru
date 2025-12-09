@@ -13,8 +13,17 @@ function SupplierForm() {
     try {
       await addSupplier({ name, phone, address });
       setMessage('تامین‌کننده با موفقیت ثبت شد');
-    } catch {
-      setMessage('خطا در ثبت تامین‌کننده');
+    } catch (err) {
+      console.error('Supplier creation error:', err.response?.data);
+      let errorMessage = 'خطا در ثبت تامین‌کننده';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
     }
   };
 

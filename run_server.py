@@ -19,12 +19,12 @@ def run_migrations():
     sys.path.insert(0, backend_dir)
     
     try:
-        print("🔄 Running database migrations...")
+        print("[*] Running database migrations...")
         from migrate_db import migrate
         migrate()
-        print("✅ Migrations completed\n")
+        print("[+] Migrations completed\n")
     except Exception as e:
-        print(f"⚠️  Migration warning: {e}\n")
+        print(f"[!] Migration warning: {e}\n")
 
 if __name__ == "__main__":
     # Run migrations first

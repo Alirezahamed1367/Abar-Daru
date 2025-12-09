@@ -107,11 +107,12 @@ class Transfer(Base):
     consumer_id = Column(Integer, ForeignKey('consumers.id'), nullable=True)
     transfer_type = Column(String, default='warehouse') # 'warehouse', 'consumer', or 'disposal'
     drug_id = Column(Integer, ForeignKey('drugs.id'))
-    expire_date = Column(String, nullable=False)  # YYYY-MM format
+    expire_date = Column(String, nullable=True)  # YYYY-MM format, nullable for non-expiry drugs
     transfer_date = Column(String, nullable=True) # Jalali YYYY/MM/DD
     quantity_sent = Column(Integer, nullable=False)
     quantity_received = Column(Integer, default=0)
     status = Column(String, default='pending')  # pending, confirmed, mismatch
+    created_by = Column(String, nullable=True)  # username of creator
     created_at = Column(String)
     confirmed_at = Column(String)
     source_warehouse = relationship('Warehouse', foreign_keys=[source_warehouse_id])

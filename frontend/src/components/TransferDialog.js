@@ -51,6 +51,16 @@ function TransferDialog({
       setConsumerId(editData.consumer_id || '');
       setQuantity(editData.quantity_sent || '');
       setTransferDate(editData.transfer_date || moment().locale('fa').format('YYYY/MM/DD'));
+      
+      // Find matching inventory item
+      const matchingInv = inventory.find(inv => 
+        inv.warehouse_id === editData.source_warehouse_id &&
+        inv.drug_id === editData.drug_id &&
+        inv.expire_date === editData.expire_date
+      );
+      if (matchingInv) {
+        setSelectedInventoryId(matchingInv.id);
+      }
     } else {
       setTransferType('warehouse');
       setSourceWarehouse('');
@@ -61,7 +71,7 @@ function TransferDialog({
       setTransferDate(moment().locale('fa').format('YYYY/MM/DD'));
     }
     setError('');
-  }, [editData, open]);
+  }, [editData, open, inventory]);
 
   const availableInventory = inventory.filter(
     inv => inv.warehouse_id === parseInt(sourceWarehouse) && inv.quantity > 0
@@ -73,6 +83,58 @@ function TransferDialog({
     if (daysB === null) return -1;
     return daysA - daysB; // Ascending: expired/closest first
   });
+
+  // DEBUG: Log filtering
+  React.useEffect(() => {
+    if (sourceWarehouse) {
+      console.log('=== INVENTORY FILTER DEBUG ===');
+      console.log('Source warehouse:', sourceWarehouse, typeof sourceWarehouse);
+      console.log('Total inventory items:', inventory.length);
+      console.log('Filtered available inventory:', availableInventory.length);
+      if (availableInventory.length > 0) {
+        console.log('Sample available item:', availableInventory[0]);
+      }
+    }
+  }, [sourceWarehouse, inventory]);
+
+  // DEBUG: Log inventory filtering
+  React.useEffect(() => {
+    if (sourceWarehouse) {
+      console.log('=== TransferDialog DEBUG ===');
+      console.log('Source Warehouse ID:', sourceWarehouse, 'Type:', typeof sourceWarehouse);
+      console.log('All inventory count:', inventory.length);
+      console.log('Available inventory count:', availableInventory.length);
+      console.log('Available inventory:', availableInventory.map(inv => ({
+        id: inv.id,
+        warehouse_id: inv.warehouse_id,
+        drug_id: inv.drug_id,
+        quantity: inv.quantity,
+        expire_date: inv.expire_date
+      })));
+    }
+  }, [sourceWarehouse, inventory, availableInventory]);
+
+  console.log('DEBUG - Source Warehouse ID:', sourceWarehouse);
+  console.log('DEBUG - Available Inventory:', availableInventory);
+
+  // Get total inventory across all warehouses for selected drug + expire_date
+  const getTotalInventoryInfo = (drugId, expireDate) => {
+    const allInventories = inventory.filter(
+      inv => inv.drug_id === drugId && inv.expire_date === expireDate
+    );
+    
+    const byWarehouse = allInventories.map(inv => {
+      const wh = warehouses.find(w => w.id === inv.warehouse_id);
+      return {
+        warehouseName: wh?.name || 'نامشخص',
+        quantity: inv.quantity
+      };
+    }).filter(item => item.quantity > 0);
+    
+    const totalQty = byWarehouse.reduce((sum, item) => sum + item.quantity, 0);
+    
+    return { byWarehouse, totalQty };
+  };
 
   const handleSubmit = () => {
     if (!selectedInventoryId || !quantity || !sourceWarehouse) {
@@ -98,35 +160,64 @@ function TransferDialog({
       }
     }
 
-    const selectedInv = inventory.find(inv => inv.id === parseInt(selectedInventoryId));
+    const selectedInv = availableInventory.find(inv => inv.id === parseInt(selectedInventoryId));
     if (!selectedInv) {
+      console.error('=== ERROR: Selected inventory not found ===');
+      console.error('Selected inventory ID:', selectedInventoryId);
+      console.error('Available inventory IDs:', availableInventory.map(inv => inv.id));
+      console.error('Source warehouse:', sourceWarehouse);
       setError('موجودی انتخاب‌شده یافت نشد');
       return;
     }
 
+    console.log('=== DEBUG TRANSFER ===');
+    console.log('Selected inventory:', selectedInv);
+    console.log('Selected inventory ID:', selectedInventoryId);
+    console.log('Source warehouse ID:', sourceWarehouse);
+    console.log('Selected inv warehouse_id:', selectedInv.warehouse_id);
+    console.log('Quantity requested:', quantity);
+    console.log('Available quantity:', selectedInv.quantity);
+    console.log('Warehouse ID in selectedInv:', selectedInv.warehouse_id);
+    console.log('Source Warehouse ID:', sourceWarehouse);
+    console.log('Quantity in selectedInv:', selectedInv.quantity);
+    console.log('Requested quantity:', quantity);
+    console.log('Expire date:', selectedInv.expire_date);
+
     if (parseInt(quantity) > selectedInv.quantity) {
-      setError('تعداد درخواستی بیشتر از موجودی است');
+      const sourceWh = warehouses.find(w => w.id === parseInt(sourceWarehouse));
+      const drug = drugs.find(d => d.id === selectedInv.drug_id);
+      setError(`تعداد درخواستی (${quantity}) بیشتر از موجودی ${sourceWh?.name || 'انبار مبدا'} است (موجودی: ${selectedInv.quantity} ${drug?.name || 'عدد'})`);
       return;
     }
 
+    if (parseInt(quantity) <= 0) {
+      setError('تعداد باید بیشتر از صفر باشد');
+      return;
+    }
+
+    // For drugs without expiry date, send undefined (will be omitted from params)
+    // Backend will treat missing expire_date as None
+    const expireDate = selectedInv.expire_date || undefined;
+
     const data = {
       source_warehouse_id: sourceWarehouse,
-      destination_warehouse_id: transferType === 'warehouse' ? destWarehouse : null,
-      consumer_id: transferType === 'consumer' ? consumerId : null,
+      destination_warehouse_id: transferType === 'warehouse' ? destWarehouse : undefined,
+      consumer_id: transferType === 'consumer' ? consumerId : undefined,
       drug_id: selectedInv.drug_id,
-      expire_date: selectedInv.expire_date,
+      expire_date: expireDate, // undefined if null
       quantity: parseInt(quantity),
       transfer_type: transferType,
       transfer_date: transferDate
     };
 
+    console.log('Transfer data to submit:', data);
     onSubmit(data);
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ backgroundColor: 'secondary.main', color: 'white', fontWeight: 'bold' }}>
-        {editData ? '✏️ ویرایش حواله' : '📤 ثبت حواله جدید'}
+        {editData ? 'ویرایش حواله' : 'ثبت حواله جدید'}
       </DialogTitle>
       <DialogContent sx={{ mt: 2 }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -146,7 +237,7 @@ function TransferDialog({
                 <FormControlLabel 
                   value="disposal" 
                   control={<Radio />} 
-                  label="🗑️ معدوم سازی دارو" 
+                  label="معدوم سازی دارو" 
                   sx={{ 
                     '& .MuiFormControlLabel-label': { 
                       color: 'error.main',
@@ -157,7 +248,7 @@ function TransferDialog({
               </RadioGroup>
               {transferType === 'disposal' && (
                 <Alert severity="warning" sx={{ mt: 1 }}>
-                  ⚠️ توجه: با تایید این حواله، داروی انتخابی از موجودی و گزارشات حذف می‌شود.
+                  توجه: با تایید این حواله، داروی انتخابی از موجودی و گزارشات حذف می‌شود.
                 </Alert>
               )}
             </FormControl>
@@ -229,7 +320,8 @@ function TransferDialog({
                 const drug = drugs.find(d => d.id === option.drug_id);
                 const dose = drug?.dose ? `(${drug.dose})` : '';
                 const expiryLabel = option.expire_date || 'بدون انقضا';
-                return drug ? `${drug.name} ${dose} - انقضا: ${expiryLabel} - موجودی: ${option.quantity}` : 'Unknown';
+                const sourceWh = warehouses.find(w => w.id === parseInt(sourceWarehouse));
+                return drug ? `${drug.name} ${dose} - انقضا: ${expiryLabel} - موجودی ${sourceWh?.name || 'انبار'}: ${option.quantity}` : 'Unknown';
               }}
               value={availableInventory.find(inv => inv.id === parseInt(selectedInventoryId)) || null}
               onChange={(event, newValue) => {
@@ -249,15 +341,46 @@ function TransferDialog({
                 const drug = drugs.find(d => d.id === option.drug_id);
                 const dose = drug?.dose ? `(${drug.dose})` : '';
                 const chipColor = getExpirationColor(option.expire_date, settings.exp_warning_days);
+                const inventoryInfo = getTotalInventoryInfo(option.drug_id, option.expire_date);
+                const sourceWh = warehouses.find(w => w.id === parseInt(sourceWarehouse));
                 
                 return (
                   <li {...props} key={option.id}>
-                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                      <span><strong>{drug?.name || 'Unknown'}</strong> {dose}</span>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                        <Chip label={`انقضا: ${option.expire_date || 'ندارد'}`} size="small" color={chipColor} />
-                        <Chip label={`موجودی: ${option.quantity}`} size="small" color="primary" variant="outlined" />
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span><strong>{drug?.name || 'Unknown'}</strong> {dose}</span>
+                        <Chip 
+                          label={`موجودی این انبار: ${option.quantity}`} 
+                          size="small" 
+                          color="success" 
+                          sx={{ fontWeight: 'bold' }}
+                        />
                       </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <Chip label={`انقضا: ${option.expire_date || 'ندارد'}`} size="small" color={chipColor} />
+                        {inventoryInfo.totalQty > option.quantity && (
+                          <Chip 
+                            label={`کل موجودی: ${inventoryInfo.totalQty}`} 
+                            size="small" 
+                            color="default" 
+                            variant="outlined"
+                            title={inventoryInfo.byWarehouse.map(w => `${w.warehouseName}: ${w.quantity}`).join('\n')}
+                          />
+                        )}
+                      </div>
+                      {inventoryInfo.byWarehouse.length > 1 && (
+                        <div style={{ fontSize: '0.75rem', color: '#666', paddingLeft: '8px' }}>
+                          {inventoryInfo.byWarehouse.map((wh, idx) => (
+                            <span key={idx} style={{ 
+                              marginRight: '8px',
+                              fontWeight: wh.warehouseName === sourceWh?.name ? 'bold' : 'normal',
+                              color: wh.warehouseName === sourceWh?.name ? '#2e7d32' : '#666'
+                            }}>
+                              {wh.warehouseName}: {wh.quantity}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
@@ -265,9 +388,9 @@ function TransferDialog({
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="انتخاب دارو (از موجودی)"
+                  label={sourceWarehouse ? `انتخاب دارو (فقط موجودی ${warehouses.find(w => w.id === parseInt(sourceWarehouse))?.name || 'انبار مبدا'})` : "ابتدا انبار مبدا را انتخاب کنید"}
                   placeholder="حداقل 3 حرف وارد کنید..."
-                  helperText="داروهای منقضی/نزدیک به انقضا اول نمایش داده می‌شوند"
+                  helperText={sourceWarehouse ? "داروهای منقضی/نزدیک به انقضا اول نمایش داده می‌شوند" : ""}
                 />
               )}
               noOptionsText="دارویی در موجودی یافت نشد"

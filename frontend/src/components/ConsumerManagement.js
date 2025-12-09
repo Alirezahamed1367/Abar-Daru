@@ -48,7 +48,12 @@ function ConsumerManagement() {
   const fetchConsumers = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/consumers`);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/consumers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
       setConsumers(data);
     } catch (error) {
@@ -96,9 +101,13 @@ function ConsumerManagement() {
         ? `${API_BASE_URL}/consumers/${currentConsumer.id}`
         : `${API_BASE_URL}/consumers`;
 
+      const token = localStorage.getItem('token');
       const response = await fetch(url, {
         method: editMode ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           name: currentConsumer.name,
           address: currentConsumer.address || '',
@@ -128,8 +137,12 @@ function ConsumerManagement() {
     }
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/consumers/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {

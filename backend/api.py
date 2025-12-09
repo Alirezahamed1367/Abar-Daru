@@ -816,8 +816,8 @@ def disposed_drugs(db: Session = Depends(get_db)):
 def create_transfer(
     source_warehouse_id: int, 
     drug_id: int, 
-    expire_date: str, 
-    quantity: int, 
+    quantity: int,
+    expire_date: Optional[str] = None,
     destination_warehouse_id: Optional[int] = None,
     consumer_id: Optional[int] = None,
     transfer_type: str = 'warehouse',
@@ -825,8 +825,33 @@ def create_transfer(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_edit_permission)
 ):
+    # Log the request for debugging
+    print(f"[DEBUG] Transfer Create Request:")
+    print(f"   User: {current_user.username} (Level: {current_user.access_level})")
+    print(f"   Source Warehouse: {source_warehouse_id}")
+    print(f"   Drug: {drug_id}, Expire: {expire_date}, Qty: {quantity}")
+    print(f"   Type: {transfer_type}")
+    
+    # Check if drug requires expiry date
+    drug = db.query(Drug).filter(Drug.id == drug_id).first()
+    if not drug:
+        raise HTTPException(status_code=404, detail="دارو یافت نشد")
+    
+    # If drug requires expiry but none provided
+    if not expire_date:
+        if drug.has_expiry_date:
+            raise HTTPException(status_code=400, detail="تاریخ انقضا برای این دارو الزامی است")
+        else:
+            # For drugs without expiry, use None (NULL in database)
+            expire_date = None
+            print(f"   [INFO] Drug doesn't require expiry, using None for expire_date")
+    
     # Check source warehouse access for warehousemen
-    if not check_warehouse_access(current_user, source_warehouse_id):
+    has_access = check_warehouse_access(current_user, source_warehouse_id)
+    print(f"   Warehouse Access Check: {has_access}")
+    
+    if not has_access:
+        print(f"   [ERROR] ACCESS DENIED for user {current_user.username}")
         raise HTTPException(status_code=403, detail="شما فقط می‌توانید از انبار اختصاصی خود حواله صادر کنید")
     
     # Get transit warehouse
@@ -878,6 +903,7 @@ def create_transfer(
         quantity_sent=quantity,
         quantity_received=0,
         status=status,
+        created_by=current_user.username,
         created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         confirmed_at=None
     )
@@ -886,6 +912,103 @@ def create_transfer(
     db.refresh(transfer)
     
     log_operation(db, "Create Transfer", f"حواله {quantity} عدد دارو {drug_id} از انبار {source_warehouse_id} به کالای در راه")
+    return transfer
+
+@router.put('/transfer/{transfer_id}')
+def update_transfer(transfer_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """ویرایش حواله pending - فقط صادرکننده می‌تواند ویرایش کند"""
+    transfer = db.query(Transfer).filter(Transfer.id == transfer_id).first()
+    if not transfer:
+        raise HTTPException(status_code=404, detail="حواله یافت نشد")
+    
+    # Only pending transfers can be edited
+    if transfer.status != 'pending':
+        raise HTTPException(status_code=400, detail="فقط حواله‌های در انتظار قابل ویرایش هستند")
+    
+    # Only creator can edit (or admin/superadmin)
+    if current_user.access_level not in ['admin', 'superadmin']:
+        if transfer.created_by != current_user.username:
+            raise HTTPException(status_code=403, detail="فقط صادرکننده حواله می‌تواند آن را ویرایش کند")
+    
+    # Get transit warehouse
+    transit_wh = db.query(Warehouse).filter(Warehouse.code == "TRANSIT").first()
+    if not transit_wh:
+        raise HTTPException(status_code=500, detail="انبار کالای در راه یافت نشد")
+    
+    # Reverse old transfer (return from transit to source)
+    old_transit_inv = db.query(Inventory).filter(
+        Inventory.warehouse_id == transit_wh.id,
+        Inventory.drug_id == transfer.drug_id,
+        Inventory.expire_date == transfer.expire_date
+    ).first()
+    
+    if old_transit_inv and old_transit_inv.quantity >= transfer.quantity_sent:
+        old_transit_inv.quantity -= transfer.quantity_sent
+    
+    old_source_inv = db.query(Inventory).filter(
+        Inventory.warehouse_id == transfer.source_warehouse_id,
+        Inventory.drug_id == transfer.drug_id,
+        Inventory.expire_date == transfer.expire_date
+    ).first()
+    
+    if old_source_inv:
+        old_source_inv.quantity += transfer.quantity_sent
+    else:
+        old_source_inv = Inventory(
+            warehouse_id=transfer.source_warehouse_id,
+            drug_id=transfer.drug_id,
+            expire_date=transfer.expire_date,
+            quantity=transfer.quantity_sent,
+            supplier_id=old_transit_inv.supplier_id if old_transit_inv and old_transit_inv.supplier_id else 1
+        )
+        db.add(old_source_inv)
+    
+    # Apply new transfer data
+    new_source_warehouse_id = data.get('source_warehouse_id', transfer.source_warehouse_id)
+    new_drug_id = data.get('drug_id', transfer.drug_id)
+    new_expire_date = data.get('expire_date', transfer.expire_date)
+    new_quantity = data.get('quantity_sent', transfer.quantity_sent)
+    
+    # Check new source has enough inventory
+    new_source_inv = db.query(Inventory).filter(
+        Inventory.warehouse_id == new_source_warehouse_id,
+        Inventory.drug_id == new_drug_id,
+        Inventory.expire_date == new_expire_date
+    ).first()
+    
+    if not new_source_inv or new_source_inv.quantity < new_quantity:
+        raise HTTPException(status_code=400, detail="موجودی انبار مبدا جدید کافی نیست")
+    
+    # Deduct from new source
+    new_source_inv.quantity -= new_quantity
+    
+    # Add to transit
+    new_transit_inv = db.query(Inventory).filter(
+        Inventory.warehouse_id == transit_wh.id,
+        Inventory.drug_id == new_drug_id,
+        Inventory.expire_date == new_expire_date
+    ).first()
+    
+    if new_transit_inv:
+        new_transit_inv.quantity += new_quantity
+    else:
+        new_transit_inv = Inventory(
+            warehouse_id=transit_wh.id,
+            drug_id=new_drug_id,
+            expire_date=new_expire_date,
+            quantity=new_quantity,
+            supplier_id=new_source_inv.supplier_id
+        )
+        db.add(new_transit_inv)
+    
+    # Update transfer record
+    for key, value in data.items():
+        setattr(transfer, key, value)
+    
+    db.commit()
+    db.refresh(transfer)
+    
+    log_operation(db, "Update Transfer", f"ویرایش حواله شماره {transfer_id}")
     return transfer
 
 @router.post('/transfer/{transfer_id}/confirm')
@@ -1028,11 +1151,16 @@ def get_transit_inventory(db: Session = Depends(get_db)):
     ).order_by(Inventory.expire_date.asc()).all()
 
 @router.put('/transfer/{transfer_id}/confirm')
-def confirm_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
+def confirm_transfer_by_id(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """تایید حواله با شناسه - تایید کامل با quantity_sent"""
     transfer = db.query(Transfer).filter(Transfer.id == transfer_id).first()
     if not transfer:
         raise HTTPException(status_code=404, detail="حواله یافت نشد")
+    
+    # Check destination warehouse access for warehousemen
+    if transfer.transfer_type == 'warehouse':
+        if not check_warehouse_access(current_user, transfer.destination_warehouse_id):
+            raise HTTPException(status_code=403, detail="شما فقط می‌توانید حواله‌های ورودی به انبار خود را تایید کنید")
     
     if transfer.status != 'pending':
         raise HTTPException(status_code=400, detail="فقط حواله‌های در انتظار قابل تایید هستند")
@@ -1083,11 +1211,16 @@ def confirm_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
     return transfer
 
 @router.put('/transfer/{transfer_id}/reject')
-def reject_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
+def reject_transfer_by_id(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """رد حواله با شناسه - برگشت از کالای در راه به انبار مبدا"""
     transfer = db.query(Transfer).filter(Transfer.id == transfer_id).first()
     if not transfer:
         raise HTTPException(status_code=404, detail="حواله یافت نشد")
+    
+    # Check destination warehouse access for warehousemen
+    if transfer.transfer_type == 'warehouse':
+        if not check_warehouse_access(current_user, transfer.destination_warehouse_id):
+            raise HTTPException(status_code=403, detail="شما فقط می‌توانید حواله‌های ورودی به انبار خود را رد کنید")
     
     if transfer.status != 'pending':
         raise HTTPException(status_code=400, detail="فقط حواله‌های در انتظار قابل رد هستند")
@@ -1136,7 +1269,7 @@ def reject_transfer_by_id(transfer_id: int, db: Session = Depends(get_db)):
     return transfer
 
 @router.delete('/transfer/{transfer_id}')
-def delete_transfer(transfer_id: int, db: Session = Depends(get_db)):
+def delete_transfer(transfer_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """حذف حواله - برگشت از کالای در راه به مبدا"""
     transfer = db.query(Transfer).filter(Transfer.id == transfer_id).first()
     if not transfer:
@@ -1144,6 +1277,11 @@ def delete_transfer(transfer_id: int, db: Session = Depends(get_db)):
     
     if transfer.status in ['confirmed', 'rejected']:
         raise HTTPException(status_code=400, detail="حواله تایید یا رد شده قابل حذف نیست")
+    
+    # Only creator can delete (or admin/superadmin)
+    if current_user.access_level not in ['admin', 'superadmin']:
+        if transfer.created_by != current_user.username:
+            raise HTTPException(status_code=403, detail="فقط صادرکننده حواله می‌تواند آن را حذف کند")
     
     # Get transit warehouse
     transit_wh = db.query(Warehouse).filter(Warehouse.code == "TRANSIT").first()

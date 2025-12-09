@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Auth Debug - Console Log Saver</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #667eea; margin-bottom: 10px; }
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 600px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .log-entry { margin: 3px 0; white-space: pre-wrap; word-wrap: break-word; }
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff0000; }
+        .log-warning { color: #ffaa00; }
+        .log-info { color: #00aaff; }
+        .log-debug { color: #aaaaaa; }
+        button {
+            padding: 12px 24px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-info { background: #2196F3; color: white; }
+        .btn-warning { background: #ff9800; color: white; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .stat-value { font-size: 24px; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 14px; color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Authentication Debugger - Console Log Saver</h1>
+        <p style="color: #666; margin-bottom: 20px;">این صفحه تمام console.log ها را ذخیره می‌کند حتی بعد از logout!</p>
+        
+        <div class="warning-box">
+            ⚠️ <strong>دستورالعمل:</strong> بعد از لاگین، به صفحه اصلی بروید و حواله ثبت کنید. بعد به این صفحه برگردید تا لاگ‌ها رو ببینید!
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="totalLogs">0</div>
+                <div class="stat-label">تعداد کل لاگ‌ها</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="errorCount">0</div>
+                <div class="stat-label">تعداد خطاها</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="requestCount">0</div>
+                <div class="stat-label">تعداد درخواست‌ها</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="tokenStatus">❌</div>
+                <div class="stat-label">وضعیت توکن</div>
+            </div>
+        </div>
+        
+        <div>
+            <button class="btn-success" onclick="window.location.href='/'">🏠 رفتن به صفحه اصلی</button>
+            <button class="btn-primary" onclick="checkToken()">🔍 بررسی توکن</button>
+            <button class="btn-info" onclick="exportLogs()">💾 ذخیره لاگ‌ها</button>
+            <button class="btn-warning" onclick="clearLogs()">🗑️ پاک کردن لاگ‌ها</button>
+            <button class="btn-info" onclick="location.reload()">🔄 رفرش</button>
+        </div>
+        
+        <div class="log-container" id="logContainer">
+            <div class="log-entry log-info">در انتظار لاگ‌ها...</div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'console_logs_debug';
+        let logs = [];
+        
+        // Intercept all console methods
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const originalInfo = console.info;
+        
+        function saveLog(type, args) {
+            const timestamp = new Date().toISOString();
+            const message = Array.from(args).map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch(e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+            
+            logs.push({ timestamp, type, message });
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+            } catch(e) {
+                originalError('Failed to save logs:', e);
+            }
+            
+            // Update display if we're on debug page
+            if (document.getElementById('logContainer')) {
+                displayLogs();
+            }
+        }
+        
+        // Override console methods
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            saveLog('log', args);
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            saveLog('error', args);
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            saveLog('warn', args);
+        };
+        
+        console.info = function(...args) {
+            originalInfo.apply(console, args);
+            saveLog('info', args);
+        };
+        
+        function displayLogs() {
+            const container = document.getElementById('logContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            let errorCount = 0;
+            let requestCount = 0;
+            
+            logs.forEach((log, index) => {
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${log.type}`;
+                
+                const time = new Date(log.timestamp).toLocaleTimeString('fa-IR');
+                entry.textContent = `[${time}] [${log.type.toUpperCase()}] ${log.message}`;
+                
+                container.appendChild(entry);
+                
+                // Count stats
+                if (log.type === 'error') errorCount++;
+                if (log.message.includes('Axios Request') || log.message.includes('📤')) requestCount++;
+            });
+            
+            container.scrollTop = container.scrollHeight;
+            
+            // Update stats
+            document.getElementById('totalLogs').textContent = logs.length;
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('requestCount').textContent = requestCount;
+            
+            checkToken();
+        }
+        
+        function checkToken() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            const statusEl = document.getElementById('tokenStatus');
+            
+            if (token && user) {
+                statusEl.textContent = '✅';
+                statusEl.parentElement.style.borderColor = '#4caf50';
+                console.log('✅ Token exists:', token.substring(0, 30) + '...');
+                
+                if (user) {
+                    try {
+                        const userData = JSON.parse(user);
+                        console.log('👤 User:', userData.username, '-', userData.full_name);
+                        console.log('🔑 Access Level:', userData.access_level);
+                    } catch(e) {
+                        console.error('Failed to parse user:', e);
+                    }
+                }
+            } else {
+                statusEl.textContent = '❌';
+                statusEl.parentElement.style.borderColor = '#f44336';
+                console.log('❌ No token found!');
+            }
+        }
+        
+        function exportLogs() {
+            const logsText = logs.map(l => {
+                const time = new Date(l.timestamp).toLocaleString('fa-IR');
+                return `[${time}] [${l.type.toUpperCase()}] ${l.message}`;
+            }).join('\n');
+            
+            const blob = new Blob([logsText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `console-logs-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            console.log('💾 Logs exported!', logs.length, 'entries');
+        }
+        
+        function clearLogs() {
+            if (confirm('آیا مطمئن هستید که می‌خواهید تمام لاگ‌ها پاک شوند؟')) {
+                logs = [];
+                localStorage.removeItem(STORAGE_KEY);
+                displayLogs();
+                console.log('🗑️ Logs cleared!');
+            }
+        }
+        
+        // Load logs on page load
+        window.onload = () => {
+            try {
+                const savedLogs = localStorage.getItem(STORAGE_KEY);
+                if (savedLogs) {
+                    logs = JSON.parse(savedLogs);
+                    console.log('📂 Loaded', logs.length, 'saved logs');
+                }
+            } catch(e) {
+                console.error('Failed to load logs:', e);
+            }
+            
+            displayLogs();
+            
+            console.log('═══════════════════════════════════');
+            console.log('🔍 Console Log Saver Activated!');
+            console.log('All console.log/error/warn will be saved');
+            console.log('═══════════════════════════════════');
+        };
+    </script>
+</body>
+</html>

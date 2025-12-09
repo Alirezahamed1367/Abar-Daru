@@ -150,8 +150,13 @@ function InventoryForm() {
       setMessageType('success');
       setTimeout(() => setMessage(''), 3000);
       fetchReceipts();
-    } catch (e) {
-      setMessage('خطا در حذف رسید');
+    } catch (err) {
+      console.error('Receipt deletion error:', err.response?.data);
+      let errorMessage = 'خطا در حذف رسید';
+      if (err.response?.data?.detail && typeof err.response.data.detail === 'string') {
+        errorMessage = err.response.data.detail;
+      }
+      setMessage(errorMessage);
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }
@@ -203,8 +208,17 @@ function InventoryForm() {
       setTimeout(() => setMessage(''), 3000);
       fetchReceipts();
       handleCloseDialog();
-    } catch (e) {
-      setMessage(editingReceipt ? 'خطا در ویرایش رسید' : 'خطا در ثبت رسید');
+    } catch (err) {
+      console.error('Receipt submit error:', err.response?.data);
+      let errorMessage = editingReceipt ? 'خطا در ویرایش رسید' : 'خطا در ثبت رسید';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      setMessage(errorMessage);
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }

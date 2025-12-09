@@ -16,6 +16,14 @@ if not os.path.exists(images_path):
     os.makedirs(images_path)
 app.mount("/images", StaticFiles(directory=images_path), name="images")
 
+# Test page for debugging
+@app.get("/test")
+async def serve_test_page():
+    test_file = os.path.join(os.path.dirname(__file__), 'test-simple.html')
+    if os.path.exists(test_file):
+        return FileResponse(test_file)
+    return {"error": "Test page not found"}
+
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -66,9 +74,10 @@ def create_default_users():
 
 # Serve React App
 build_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'build')
+static_path = os.path.join(build_path, "static")
 
-if os.path.exists(build_path):
-    app.mount("/static", StaticFiles(directory=os.path.join(build_path, "static")), name="static")
+if os.path.exists(build_path) and os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
     
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
@@ -80,23 +89,22 @@ if os.path.exists(build_path):
         # Check if file exists in build folder (e.g. manifest.json, favicon.ico)
         file_path = os.path.join(build_path, full_path)
         if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
+            response = FileResponse(file_path)
+            # Prevent caching for HTML files
+            if full_path.endswith('.html') or full_path == '':
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+            return response
             
         # Otherwise return index.html for SPA routing
-        return FileResponse(os.path.join(build_path, "index.html"))
-
-    @app.get("/{full_path:path}")
-    async def serve_react_app(full_path: str):
-        # Check if file exists in build folder (e.g. manifest.json, favicon.ico)
-        file_path = os.path.join(build_path, full_path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        
-        # Otherwise return index.html (SPA routing)
-        # But we must be careful not to catch API routes if they weren't matched above.
-        # Since app.include_router(router) is called before, API routes take precedence.
-        return FileResponse(os.path.join(build_path, "index.html"))
+        response = FileResponse(os.path.join(build_path, "index.html"))
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 else:
     @app.get('/')
     def read_root():
         return {"message": "Pharmacy Warehouse API is running. Frontend build not found."}
+

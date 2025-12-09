@@ -63,7 +63,16 @@ function UserManagement() {
       setOpenDialog(false);
       loadUsers();
     } catch (err) {
-      showSnackbar(err.response?.data?.detail || 'خطا در ذخیره کاربر', 'error');
+      console.error('Save user error:', err);
+      let errorMessage = 'خطا در ذخیره کاربر';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      showSnackbar(errorMessage, 'error');
     }
   };
 
@@ -74,7 +83,12 @@ function UserManagement() {
       showSnackbar('کاربر حذف شد', 'success');
       loadUsers();
     } catch (err) {
-      showSnackbar(err.response?.data?.detail || 'خطا در حذف کاربر', 'error');
+      console.error('Delete user error:', err);
+      let errorMessage = 'خطا در حذف کاربر';
+      if (err.response?.data?.detail && typeof err.response.data.detail === 'string') {
+        errorMessage = err.response.data.detail;
+      }
+      showSnackbar(errorMessage, 'error');
     }
   };
 

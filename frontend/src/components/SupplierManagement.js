@@ -48,7 +48,12 @@ function SupplierManagement() {
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/suppliers`);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/suppliers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
       setSuppliers(data);
     } catch (error) {
@@ -96,9 +101,13 @@ function SupplierManagement() {
         ? `${API_BASE_URL}/suppliers/${currentSupplier.id}`
         : `${API_BASE_URL}/suppliers`;
 
+      const token = localStorage.getItem('token');
       const response = await fetch(url, {
         method: editMode ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           name: currentSupplier.name,
           phone: currentSupplier.phone || '',
@@ -128,8 +137,12 @@ function SupplierManagement() {
     }
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/suppliers/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {

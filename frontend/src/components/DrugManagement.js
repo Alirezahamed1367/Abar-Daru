@@ -146,7 +146,16 @@ function DrugManagement() {
       setImagePreview('');
     } catch (error) {
       console.error('Save drug error:', error);
-      const errorMessage = error.message || error.response?.data?.detail || 'خطا در ذخیره‌سازی';
+      let errorMessage = 'خطا در ذخیره‌سازی';
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        } else if (Array.isArray(error.response.data.detail)) {
+          errorMessage = error.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       showSnackbar(errorMessage, 'error');
     }
   };
@@ -195,7 +204,12 @@ function DrugManagement() {
       showSnackbar('دارو با موفقیت حذف شد', 'success');
       loadDrugs();
     } catch (error) {
-      showSnackbar('خطا در حذف دارو', 'error');
+      console.error('Delete drug error:', error);
+      let errorMessage = 'خطا در حذف دارو';
+      if (error.response?.data?.detail && typeof error.response.data.detail === 'string') {
+        errorMessage = error.response.data.detail;
+      }
+      showSnackbar(errorMessage, 'error');
     }
   };
 

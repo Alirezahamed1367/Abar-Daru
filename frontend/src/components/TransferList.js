@@ -7,6 +7,8 @@ import {
 import { DataGrid, faIR } from '@mui/x-data-grid';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -20,6 +22,7 @@ import { getExpirationColor } from '../utils/expirationUtils';
 import { useSettings } from '../utils/SettingsContext';
 import { useCurrentUser } from '../utils/useCurrentUser';
 import { isWarehouseman } from '../utils/permissions';
+import TransferDialog from './TransferDialog';
 
 function TransferList() {
   const { settings } = useSettings();
@@ -35,10 +38,36 @@ function TransferList() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
+  
+  // States for edit dialog
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState(null);
+  const [warehouses, setWarehouses] = useState([]);
+  const [drugs, setDrugs] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [consumers, setConsumers] = useState([]);
 
   useEffect(() => {
     loadTransfers();
+    loadEditDialogData();
   }, []);
+
+  const loadEditDialogData = async () => {
+    try {
+      const [whRes, drugRes, invRes, consRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/warehouses`),
+        axios.get(`${API_BASE_URL}/drugs`),
+        axios.get(`${API_BASE_URL}/inventory`),
+        axios.get(`${API_BASE_URL}/consumers`)
+      ]);
+      setWarehouses(whRes.data);
+      setDrugs(drugRes.data);
+      setInventory(invRes.data);
+      setConsumers(consRes.data);
+    } catch (err) {
+      console.error('Error loading edit dialog data:', err);
+    }
+  };
 
   useEffect(() => {
     let filtered = transfers;
@@ -121,6 +150,36 @@ function TransferList() {
     }
   };
 
+  const handleCancel = async (transferId) => {
+    if (!window.confirm('آیا از کنسل کردن این حواله اطمینان دارید؟ موجودی به انبار مبدا برگشت داده می‌شود.')) return;
+
+    try {
+      await axios.delete(`${API_BASE_URL}/transfer/${transferId}`);
+      showMessage('حواله با موفقیت کنسل شد', 'success');
+      loadTransfers();
+    } catch (err) {
+      showMessage(err.response?.data?.detail || 'خطا در کنسل حواله', 'error');
+    }
+  };
+
+  const handleEdit = (transfer) => {
+    setEditingTransfer(transfer);
+    setOpenEditDialog(true);
+  };
+
+  const handleEditSubmit = async (data) => {
+    try {
+      await axios.put(`${API_BASE_URL}/transfer/${editingTransfer.id}`, data);
+      showMessage('حواله با موفقیت ویرایش شد', 'success');
+      setOpenEditDialog(false);
+      setEditingTransfer(null);
+      loadTransfers();
+      loadEditDialogData(); // Refresh inventory after edit
+    } catch (err) {
+      showMessage(err.response?.data?.detail || 'خطا در ویرایش حواله', 'error');
+    }
+  };
+
   const submitConfirm = async () => {
     if (!receivedQty || receivedQty <= 0) {
       showMessage('تعداد دریافتی باید بیشتر از صفر باشد', 'error');
@@ -151,7 +210,16 @@ function TransferList() {
       setReceivedQty('');
       setSelectedTransfer(null);
     } catch (err) {
-      showMessage(err.response?.data?.detail || 'خطا در تایید حواله', 'error');
+      console.error('Transfer confirm error:', err);
+      let errorMessage = 'خطا در تایید حواله';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          errorMessage = err.response.data.detail.map(e => e.msg || e).join(', ');
+        }
+      }
+      showMessage(errorMessage, 'error');
     }
   };
 
@@ -187,14 +255,22 @@ function TransferList() {
       field: 'transfer_type',
       headerName: 'نوع',
       width: 120,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value === 'warehouse' ? 'بین انبار' : 'مصرف‌کننده'} 
-          color={params.value === 'warehouse' ? 'primary' : 'secondary'}
-          size="small"
-          variant="outlined"
-        />
-      )
+      renderCell: (params) => {
+        const typeConfig = {
+          warehouse: { label: 'بین انبار', color: 'primary' },
+          consumer: { label: 'مصرف‌کننده', color: 'secondary' },
+          disposal: { label: 'معدوم‌سازی', color: 'error' }
+        };
+        const config = typeConfig[params.value] || typeConfig.warehouse;
+        return (
+          <Chip 
+            label={config.label} 
+            color={config.color}
+            size="small"
+            variant="outlined"
+          />
+        );
+      }
     },
     {
       field: 'source_warehouse',
@@ -211,9 +287,12 @@ function TransferList() {
       valueGetter: (params) => {
         if (params.row.transfer_type === 'warehouse') {
           return params.row.destination_warehouse?.name || '-';
-        } else {
+        } else if (params.row.transfer_type === 'consumer') {
           return params.row.consumer?.name || '-';
+        } else if (params.row.transfer_type === 'disposal') {
+          return 'معدوم‌سازی';
         }
+        return '-';
       }
     },
     {
@@ -227,14 +306,19 @@ function TransferList() {
       field: 'expire_date', 
       headerName: 'انقضا', 
       width: 130,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value} 
-          color={getExpirationColor(params.value, settings.exp_warning_days)}
-          size="small"
-          sx={{ fontWeight: 'bold' }}
-        />
-      )
+      renderCell: (params) => {
+        if (!params.value || params.value === 'null') {
+          return <Chip label="ندارد" color="default" size="small" />;
+        }
+        return (
+          <Chip 
+            label={params.value} 
+            color={getExpirationColor(params.value, settings.exp_warning_days)}
+            size="small"
+            sx={{ fontWeight: 'bold' }}
+          />
+        );
+      }
     },
     { 
       field: 'quantity_sent', 
@@ -275,7 +359,7 @@ function TransferList() {
     {
       field: 'actions',
       headerName: 'عملیات',
-      width: 130,
+      width: 180,
       renderCell: (params) => {
         const isPending = params.row.status === 'pending';
         const isWarehouseTransfer = params.row.transfer_type === 'warehouse';
@@ -285,6 +369,9 @@ function TransferList() {
         // Check if user can confirm this transfer
         const canConfirm = !isWarehouseman(currentUser) || 
           (currentUser?.warehouses?.includes(params.row.destination_warehouse?.id));
+        
+        // Check if user created this transfer (for edit/cancel)
+        const isCreator = params.row.created_by === currentUser?.username;
         
         return (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -320,6 +407,42 @@ function TransferList() {
               >
                 <CancelIcon fontSize="small" />
               </IconButton>
+            </Tooltip>
+            <Tooltip title={isCreator ? "ویرایش حواله" : "فقط صادرکننده می‌تواند ویرایش کند"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="info"
+                  onClick={() => handleEdit(params.row)}
+                  disabled={!isCreator}
+                  sx={{ 
+                    '&:hover': { 
+                      backgroundColor: 'info.light',
+                      color: 'white'
+                    } 
+                  }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={isCreator ? "کنسل حواله" : "فقط صادرکننده می‌تواند کنسل کند"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="warning"
+                  onClick={() => handleCancel(params.row.id)}
+                  disabled={!isCreator}
+                  sx={{ 
+                    '&:hover': { 
+                      backgroundColor: 'warning.light',
+                      color: 'white'
+                    } 
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         );
@@ -479,6 +602,7 @@ function TransferList() {
               <MenuItem value="all">همه</MenuItem>
               <MenuItem value="warehouse">بین انبار</MenuItem>
               <MenuItem value="consumer">مصرف‌کننده</MenuItem>
+              <MenuItem value="disposal">معدوم‌سازی</MenuItem>
             </TextField>
           </Grid>
         </Grid>
@@ -604,6 +728,22 @@ function TransferList() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Transfer Dialog */}
+      <TransferDialog
+        open={openEditDialog}
+        onClose={() => {
+          setOpenEditDialog(false);
+          setEditingTransfer(null);
+        }}
+        warehouses={warehouses}
+        drugs={drugs}
+        inventory={inventory}
+        consumers={consumers}
+        onSubmit={handleEditSubmit}
+        editData={editingTransfer}
+        currentUser={currentUser}
+      />
     </Box>
   );
 }

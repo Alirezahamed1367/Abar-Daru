@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تست احراز هویت</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 { color: #667eea; margin-bottom: 20px; }
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 600px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        .log-entry { margin: 5px 0; }
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff0000; }
+        .log-warning { color: #ffaa00; }
+        .log-info { color: #00aaff; }
+        button {
+            padding: 12px 24px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .btn-test { background: #667eea; color: white; }
+        .btn-login { background: #4caf50; color: white; }
+        .btn-clear { background: #f44336; color: white; }
+        .login-form {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .login-form input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>تست سیستم احراز هویت - انبار دارو</h1>
+        
+        <div class="login-form">
+            <h3>ورود به سیستم</h3>
+            <input type="text" id="username" placeholder="نام کاربری" value="admin">
+            <input type="password" id="password" placeholder="رمز عبور" value="admin">
+            <button class="btn-login" onclick="doLogin()">ورود</button>
+        </div>
+        
+        <div>
+            <button class="btn-test" onclick="testTransfer()">تست ثبت حواله</button>
+            <button class="btn-test" onclick="checkToken()">بررسی توکن</button>
+            <button class="btn-clear" onclick="clearStorage()">پاک کردن Storage</button>
+        </div>
+        
+        <div class="log-container" id="logContainer">
+            <div class="log-entry log-info">در انتظار دستور...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let logCounter = 0;
+        
+        function log(message, type = 'info') {
+            logCounter++;
+            const time = new Date().toLocaleTimeString('fa-IR');
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${time}] ${logCounter}. ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        async function doLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            log(`تلاش برای لاگین با کاربر: ${username}`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/login?username=${username}&password=${password}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`[OK] لاگین موفق!`, 'success');
+                    log(`Token: ${data.access_token.substring(0, 30)}...`, 'success');
+                    log(`User: ${data.user.full_name} (${data.user.access_level})`, 'success');
+                    
+                    localStorage.setItem('token', data.access_token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    log('[SAVED] Token & User saved to localStorage', 'success');
+                } else {
+                    const error = await response.text();
+                    log(`[ERROR] خطا در لاگین: ${error}`, 'error');
+                }
+            } catch (err) {
+                log(`[ERROR] خطای شبکه: ${err.message}`, 'error');
+            }
+        }
+        
+        function checkToken() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            log('بررسی localStorage:', 'info');
+            log(`  Token موجود: ${token ? 'YES' : 'NO'}`, token ? 'success' : 'error');
+            if (token) {
+                log(`  Token Preview: ${token.substring(0, 50)}...`, 'info');
+            }
+            log(`  User موجود: ${user ? 'YES' : 'NO'}`, user ? 'success' : 'error');
+            if (user) {
+                const userData = JSON.parse(user);
+                log(`  Username: ${userData.username}`, 'info');
+            }
+        }
+        
+        async function testTransfer() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                log('[ERROR] ابتدا باید لاگین کنید!', 'error');
+                return;
+            }
+            
+            log('========================================', 'info');
+            log('تست API ثبت حواله...', 'info');
+            log('========================================', 'info');
+            
+            const testData = {
+                source_warehouse_id: 2,
+                drug_id: 1,
+                expire_date: '2026-01',
+                quantity: 1,
+                destination_warehouse_id: 3,
+                transfer_type: 'warehouse'
+            };
+            
+            log(`[REQUEST] POST /api/transfer/create`, 'info');
+            log(`  Data: ${JSON.stringify(testData)}`, 'info');
+            log(`  Token: ${token.substring(0, 30)}...`, 'info');
+            
+            try {
+                const url = `${API_BASE}/transfer/create?${new URLSearchParams(testData)}`;
+                log(`  URL: ${url}`, 'info');
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                log(`[RESPONSE] Status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const responseText = await response.text();
+                log(`  Response: ${responseText}`, response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    log('[SUCCESS] حواله با موفقیت ثبت شد!', 'success');
+                } else {
+                    log(`[FAILED] خطا در ثبت: ${responseText}`, 'error');
+                }
+            } catch (err) {
+                log(`[ERROR] خطای شبکه: ${err.message}`, 'error');
+            }
+        }
+        
+        function clearStorage() {
+            if (confirm('آیا مطمئن هستید؟')) {
+                localStorage.clear();
+                log('[CLEARED] localStorage پاک شد', 'warning');
+            }
+        }
+        
+        window.onload = () => {
+            checkToken();
+        };
+    </script>
+</body>
+</html>
