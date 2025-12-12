@@ -73,7 +73,7 @@ def create_default_users():
     db.close()
 
 # Serve React App
-build_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'build')
+build_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build')
 static_path = os.path.join(build_path, "static")
 
 if os.path.exists(build_path) and os.path.exists(static_path):
