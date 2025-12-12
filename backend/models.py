@@ -99,6 +99,32 @@ class OperationLog(Base):
     timestamp = Column(String)
     user = relationship('User')
 
+class Tool(Base):
+    __tablename__ = 'tools'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    serial_number = Column(String, nullable=False, unique=True)  # Unique serial for each tool unit
+    manufacturer = Column(String)
+    image = Column(String)  # Path to cached file (images/tool_X.jpg)
+    image_data = Column(Text)  # Base64 encoded image data for backup
+    description = Column(Text)
+
+class ToolInventory(Base):
+    __tablename__ = 'tool_inventory'
+    __table_args__ = (
+        UniqueConstraint('warehouse_id', 'tool_id', name='uq_tool_inventory_warehouse_tool'),
+    )
+    id = Column(Integer, primary_key=True)
+    warehouse_id = Column(Integer, ForeignKey('warehouses.id'))
+    tool_id = Column(Integer, ForeignKey('tools.id'))
+    supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=True)
+    entry_date = Column(String, nullable=True)  # Jalali YYYY/MM/DD
+    quantity = Column(Integer, default=1)  # Usually 1 per serial, but kept for consistency
+    is_disposed = Column(Boolean, default=False)  # True if disposed/destroyed
+    warehouse = relationship('Warehouse')
+    tool = relationship('Tool')
+    supplier = relationship('Supplier')
+
 class Transfer(Base):
     __tablename__ = 'transfers'
     id = Column(Integer, primary_key=True)
@@ -106,8 +132,10 @@ class Transfer(Base):
     destination_warehouse_id = Column(Integer, ForeignKey('warehouses.id'), nullable=True)
     consumer_id = Column(Integer, ForeignKey('consumers.id'), nullable=True)
     transfer_type = Column(String, default='warehouse') # 'warehouse', 'consumer', or 'disposal'
-    drug_id = Column(Integer, ForeignKey('drugs.id'))
-    expire_date = Column(String, nullable=True)  # YYYY-MM format, nullable for non-expiry drugs
+    drug_id = Column(Integer, ForeignKey('drugs.id'), nullable=True)
+    tool_id = Column(Integer, ForeignKey('tools.id'), nullable=True)
+    item_type = Column(String, default='drug')  # 'drug' or 'tool'
+    expire_date = Column(String, nullable=True)  # YYYY-MM format, nullable for tools and non-expiry drugs
     transfer_date = Column(String, nullable=True) # Jalali YYYY/MM/DD
     quantity_sent = Column(Integer, nullable=False)
     quantity_received = Column(Integer, default=0)
@@ -119,3 +147,4 @@ class Transfer(Base):
     destination_warehouse = relationship('Warehouse', foreign_keys=[destination_warehouse_id])
     consumer = relationship('Consumer')
     drug = relationship('Drug')
+    tool = relationship('Tool')

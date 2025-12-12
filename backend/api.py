@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from database import SessionLocal, init_db, get_db
-from models import User, Warehouse, Supplier, Consumer, Drug, Inventory, OperationLog, Transfer, SystemSettings, Permission
+from models import User, Warehouse, Supplier, Consumer, Drug, Inventory, OperationLog, Transfer, SystemSettings, Permission, Tool, ToolInventory
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import shutil, os
@@ -1518,8 +1518,15 @@ def export_pdf(
     
     # Build query with filters
     query = db.query(Inventory).filter(Inventory.is_disposed == False)
+    
+    # Get warehouse name if filtered
+    warehouse_name = None
     if warehouse_id:
         query = query.filter(Inventory.warehouse_id == warehouse_id)
+        warehouse = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+        if warehouse:
+            warehouse_name = warehouse.name
+    
     if drug_id:
         query = query.filter(Inventory.drug_id == drug_id)
     if expire_date_from:
@@ -1559,50 +1566,54 @@ def export_pdf(
         except:
             return colors.grey
     
+    # Custom page template with repeating header
+    def header_footer(canvas, doc):
+        canvas.saveState()
+        
+        # Add header on every page
+        canvas.setFont('Vazirmatn', 16)
+        canvas.setFillColor(colors.HexColor('#1976d2'))
+        title_text = prepare_persian_text("گزارش موجودی انبار دارویی")
+        canvas.drawCentredString(A4[0] / 2, A4[1] - 1.5*cm, title_text)
+        
+        # Add warehouse name if filtered
+        if warehouse_name:
+            canvas.setFont('Vazirmatn', 12)
+            canvas.setFillColor(colors.HexColor('#666666'))
+            wh_text = prepare_persian_text(f"انبار: {warehouse_name}")
+            canvas.drawCentredString(A4[0] / 2, A4[1] - 2.2*cm, wh_text)
+        
+        # Add date
+        canvas.setFont('Vazirmatn', 9)
+        canvas.setFillColor(colors.grey)
+        now = datetime.now()
+        jalali_now = jdatetime.datetime.fromgregorian(datetime=now)
+        current_date = jalali_now.strftime('%Y/%m/%d')
+        date_text = prepare_persian_text(f"تاریخ: {current_date}")
+        canvas.drawCentredString(A4[0] / 2, A4[1] - 2.8*cm, date_text)
+        
+        # Add page number in footer
+        canvas.setFont('Vazirmatn', 9)
+        page_text = prepare_persian_text(f"صفحه {doc.page}")
+        canvas.drawCentredString(A4[0] / 2, 1*cm, page_text)
+        
+        canvas.restoreState()
+    
     # Create PDF
     file_path = 'inventory_export.pdf'
-    doc = SimpleDocTemplate(file_path, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(
+        file_path, 
+        pagesize=A4, 
+        rightMargin=2*cm, 
+        leftMargin=2*cm, 
+        topMargin=3.5*cm,  # Increased for header
+        bottomMargin=2*cm
+    )
     
     # Story container
     story = []
     
-    # Create custom styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontName='Vazirmatn',
-        fontSize=18,
-        textColor=colors.HexColor('#1976d2'),
-        alignment=TA_CENTER,
-        spaceAfter=20
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'CustomSubtitle',
-        parent=styles['Normal'],
-        fontName='Vazirmatn',
-        fontSize=10,
-        textColor=colors.grey,
-        alignment=TA_CENTER,
-        spaceAfter=20
-    )
-    
-    # Add title
-    title_text = prepare_persian_text("گزارش موجودی انبار دارویی")
-    story.append(Paragraph(title_text, title_style))
-    
-    # Add date and time in Persian (Jalali)
-    now = datetime.now()
-    jalali_now = jdatetime.datetime.fromgregorian(datetime=now)
-    current_date = jalali_now.strftime('%Y/%m/%d')
-    current_time = now.strftime('%H:%M')
-    date_text = prepare_persian_text(f"تاریخ: {current_date} - ساعت: {current_time}")
-    story.append(Paragraph(date_text, subtitle_style))
-    
-    story.append(Spacer(1, 0.5*cm))
-    
-    # Prepare table data
+    # Prepare table data (without warehouse column)
     table_data = []
     
     # Header row
@@ -1610,7 +1621,6 @@ def export_pdf(
         prepare_persian_text("تعداد"),
         prepare_persian_text("تاریخ انقضا"),
         prepare_persian_text("نام دارو"),
-        prepare_persian_text("نام انبار"),
         prepare_persian_text("ردیف")
     ]
     table_data.append(headers)
@@ -1621,13 +1631,12 @@ def export_pdf(
             prepare_persian_text(str(inv.quantity)),
             str(inv.expire_date) if inv.expire_date else "-",
             prepare_persian_text(inv.drug.name),
-            prepare_persian_text(inv.warehouse.name),
             str(idx)
         ]
         table_data.append(row)
     
-    # Create table
-    table = Table(table_data, colWidths=[3*cm, 3.5*cm, 5*cm, 5*cm, 2*cm])
+    # Create table with wider columns (no warehouse column)
+    table = Table(table_data, colWidths=[3.5*cm, 4*cm, 7*cm, 2.5*cm], repeatRows=1)
     
     # Table style with colors
     table_style = [
@@ -1642,7 +1651,7 @@ def export_pdf(
         
         # Data rows styling
         ('FONTNAME', (0, 1), (-1, -1), 'Vazirmatn'),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
         ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
@@ -1667,6 +1676,7 @@ def export_pdf(
     total_quantity = sum(inv.quantity for inv in inventory)
     summary_text = prepare_persian_text(f"تعداد کل اقلام: {total_items} | مجموع تعداد: {total_quantity}")
     
+    styles = getSampleStyleSheet()
     summary_style = ParagraphStyle(
         'Summary',
         parent=styles['Normal'],
@@ -1681,8 +1691,8 @@ def export_pdf(
     )
     story.append(Paragraph(summary_text, summary_style))
     
-    # Build PDF
-    doc.build(story)
+    # Build PDF with custom header/footer
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
     
     return FileResponse(file_path, media_type='application/pdf', filename='inventory_export.pdf')
 
@@ -1902,3 +1912,284 @@ def remove_permission_from_user(user_id: int, permission_id: int, db: Session = 
     
     raise HTTPException(status_code=404, detail="این دسترسی برای کاربر وجود ندارد")
 
+# ==================== TOOLS ENDPOINTS ====================
+
+# Tool Management
+@router.get('/tools')
+def get_all_tools(db: Session = Depends(get_db)):
+    """دریافت لیست تمام ابزارها"""
+    tools = db.query(Tool).all()
+    return [{
+        'id': t.id,
+        'name': t.name,
+        'serial_number': t.serial_number,
+        'manufacturer': t.manufacturer,
+        'image': t.image,
+        'description': t.description
+    } for t in tools]
+
+@router.post('/tools')
+def create_tool(data: dict, db: Session = Depends(get_db)):
+    """ایجاد ابزار جدید"""
+    # Check if serial number already exists
+    if db.query(Tool).filter(Tool.serial_number == data['serial_number']).first():
+        raise HTTPException(status_code=400, detail="سریال تکراری است")
+    
+    # Handle image
+    image_path = None
+    image_data = data.get('image_data')
+    
+    if image_data:
+        import base64
+        import uuid
+        images_dir = os.path.join(os.path.dirname(__file__), 'images')
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+        
+        image_filename = f"tool_{uuid.uuid4().hex[:8]}.jpg"
+        image_path = os.path.join('images', image_filename)
+        full_path = os.path.join(images_dir, image_filename)
+        
+        try:
+            if ',' in image_data:
+                image_data = image_data.split(',')[1]
+            
+            with open(full_path, 'wb') as f:
+                f.write(base64.b64decode(image_data))
+        except Exception as e:
+            print(f"Error saving image: {e}")
+            image_path = None
+    
+    tool = Tool(
+        name=data['name'],
+        serial_number=data['serial_number'],
+        manufacturer=data.get('manufacturer', ''),
+        image=image_path,
+        image_data=data.get('image_data', ''),
+        description=data.get('description', '')
+    )
+    
+    db.add(tool)
+    db.commit()
+    db.refresh(tool)
+    
+    return {
+        'id': tool.id,
+        'name': tool.name,
+        'serial_number': tool.serial_number,
+        'manufacturer': tool.manufacturer,
+        'image': tool.image,
+        'description': tool.description
+    }
+
+@router.put('/tools/{tool_id}')
+def update_tool(tool_id: int, data: dict, db: Session = Depends(get_db)):
+    """ویرایش ابزار"""
+    tool = db.query(Tool).filter(Tool.id == tool_id).first()
+    if not tool:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    
+    # Check serial uniqueness if changed
+    if 'serial_number' in data and data['serial_number'] != tool.serial_number:
+        if db.query(Tool).filter(Tool.serial_number == data['serial_number']).first():
+            raise HTTPException(status_code=400, detail="سریال تکراری است")
+    
+    # Handle image update
+    if 'image_data' in data and data['image_data']:
+        import base64
+        import uuid
+        images_dir = os.path.join(os.path.dirname(__file__), 'images')
+        if not os.path.exists(images_dir):
+            os.makedirs(images_dir)
+        
+        image_filename = f"tool_{uuid.uuid4().hex[:8]}.jpg"
+        image_path = os.path.join('images', image_filename)
+        full_path = os.path.join(images_dir, image_filename)
+        
+        try:
+            image_data = data['image_data']
+            if ',' in image_data:
+                image_data = image_data.split(',')[1]
+            
+            with open(full_path, 'wb') as f:
+                f.write(base64.b64decode(image_data))
+            
+            # Delete old image if exists
+            if tool.image:
+                old_path = os.path.join(os.path.dirname(__file__), tool.image)
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            
+            tool.image = image_path
+            tool.image_data = data['image_data']
+        except Exception as e:
+            print(f"Error updating image: {e}")
+    
+    # Update fields
+    if 'name' in data:
+        tool.name = data['name']
+    if 'serial_number' in data:
+        tool.serial_number = data['serial_number']
+    if 'manufacturer' in data:
+        tool.manufacturer = data['manufacturer']
+    if 'description' in data:
+        tool.description = data['description']
+    
+    db.commit()
+    db.refresh(tool)
+    
+    return {
+        'id': tool.id,
+        'name': tool.name,
+        'serial_number': tool.serial_number,
+        'manufacturer': tool.manufacturer,
+        'image': tool.image,
+        'description': tool.description
+    }
+
+@router.delete('/tools/{tool_id}')
+def delete_tool(tool_id: int, db: Session = Depends(get_db)):
+    """حذف ابزار"""
+    tool = db.query(Tool).filter(Tool.id == tool_id).first()
+    if not tool:
+        raise HTTPException(status_code=404, detail="ابزار یافت نشد")
+    
+    # Check if tool is used in inventory
+    if db.query(ToolInventory).filter(ToolInventory.tool_id == tool_id).first():
+        raise HTTPException(status_code=400, detail="این ابزار در موجودی استفاده شده و قابل حذف نیست")
+    
+    # Delete image file if exists
+    if tool.image:
+        image_path = os.path.join(os.path.dirname(__file__), tool.image)
+        if os.path.exists(image_path):
+            os.remove(image_path)
+    
+    db.delete(tool)
+    db.commit()
+    return {"message": "ابزار حذف شد"}
+
+# Tool Inventory Management
+@router.get('/tool-inventory')
+def get_all_tool_inventory(db: Session = Depends(get_db)):
+    """دریافت موجودی ابزارها"""
+    inventory = db.query(ToolInventory).filter(ToolInventory.is_disposed == False).all()
+    
+    result = []
+    for inv in inventory:
+        tool = inv.tool
+        warehouse = inv.warehouse
+        supplier = inv.supplier
+        
+        result.append({
+            'id': inv.id,
+            'warehouse_id': inv.warehouse_id,
+            'warehouse_name': warehouse.name if warehouse else '',
+            'tool_id': inv.tool_id,
+            'tool_name': tool.name if tool else '',
+            'serial_number': tool.serial_number if tool else '',
+            'manufacturer': tool.manufacturer if tool else '',
+            'supplier_id': inv.supplier_id,
+            'supplier_name': supplier.name if supplier else '',
+            'entry_date': inv.entry_date,
+            'quantity': inv.quantity
+        })
+    
+    return result
+
+@router.post('/tool-inventory')
+def add_tool_to_inventory(data: dict, db: Session = Depends(get_db)):
+    """افزودن ابزار به موجودی (رسید)"""
+    warehouse_id = data.get('warehouse_id')
+    tool_id = data.get('tool_id')
+    
+    if not warehouse_id or not tool_id:
+        raise HTTPException(status_code=400, detail="انبار و ابزار الزامی است")
+    
+    # Check if this tool already exists in this warehouse
+    existing = db.query(ToolInventory).filter(
+        ToolInventory.warehouse_id == warehouse_id,
+        ToolInventory.tool_id == tool_id,
+        ToolInventory.is_disposed == False
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="این ابزار قبلاً در این انبار ثبت شده است")
+    
+    inventory = ToolInventory(
+        warehouse_id=warehouse_id,
+        tool_id=tool_id,
+        supplier_id=data.get('supplier_id'),
+        entry_date=data.get('entry_date'),
+        quantity=1
+    )
+    
+    db.add(inventory)
+    db.commit()
+    db.refresh(inventory)
+    
+    # Log the operation
+    log_operation(db, data.get('user_id'), 'add_tool_inventory', 
+                  f"افزودن ابزار {inventory.tool.serial_number} به انبار {inventory.warehouse.name}")
+    
+    return {"message": "ابزار به موجودی اضافه شد", "id": inventory.id}
+
+@router.delete('/tool-inventory/{inventory_id}')
+def delete_tool_inventory(inventory_id: int, db: Session = Depends(get_db)):
+    """حذف ابزار از موجودی"""
+    inventory = db.query(ToolInventory).filter(ToolInventory.id == inventory_id).first()
+    if not inventory:
+        raise HTTPException(status_code=404, detail="موجودی یافت نشد")
+    
+    # Check if used in transfers
+    transfer = db.query(Transfer).filter(
+        Transfer.tool_id == inventory.tool_id,
+        Transfer.source_warehouse_id == inventory.warehouse_id,
+        Transfer.item_type == 'tool'
+    ).first()
+    
+    if transfer:
+        raise HTTPException(status_code=400, detail="این ابزار در حواله استفاده شده و قابل حذف نیست")
+    
+    db.delete(inventory)
+    db.commit()
+    return {"message": "موجودی حذف شد"}
+
+# Tool Reports
+@router.get('/tool-inventory/report')
+def get_tool_inventory_report(
+    warehouse_id: int = None,
+    tool_id: int = None,
+    db: Session = Depends(get_db)
+):
+    """گزارش جامع موجودی ابزارها"""
+    query = db.query(ToolInventory).filter(ToolInventory.is_disposed == False)
+    
+    if warehouse_id:
+        query = query.filter(ToolInventory.warehouse_id == warehouse_id)
+    if tool_id:
+        query = query.filter(ToolInventory.tool_id == tool_id)
+    
+    inventory = query.all()
+    
+    result = []
+    for inv in inventory:
+        tool = inv.tool
+        warehouse = inv.warehouse
+        supplier = inv.supplier
+        
+        result.append({
+            'id': inv.id,
+            'warehouse_id': inv.warehouse_id,
+            'warehouse_name': warehouse.name if warehouse else '',
+            'warehouse_code': warehouse.code if warehouse else '',
+            'tool_id': inv.tool_id,
+            'tool_name': tool.name if tool else '',
+            'serial_number': tool.serial_number if tool else '',
+            'manufacturer': tool.manufacturer if tool else '',
+            'supplier_id': inv.supplier_id,
+            'supplier_name': supplier.name if supplier else '',
+            'entry_date': inv.entry_date,
+            'quantity': inv.quantity
+        })
+    
+    return result

@@ -67,13 +67,58 @@ def migrate():
     except sqlite3.OperationalError as e:
         print(f"⚠️  Column is_disposed might already exist: {e}")
 
+    # Create tools table
+    try:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tools (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR NOT NULL,
+            serial_number VARCHAR NOT NULL UNIQUE,
+            manufacturer VARCHAR,
+            image VARCHAR,
+            image_data TEXT,
+            description TEXT
+        )
+        """)
+        print("✅ Created tools table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Table tools might already exist: {e}")
+
+    # Create tool_inventory table
+    try:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tool_inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            warehouse_id INTEGER REFERENCES warehouses(id),
+            tool_id INTEGER REFERENCES tools(id),
+            supplier_id INTEGER REFERENCES suppliers(id),
+            entry_date VARCHAR,
+            quantity INTEGER DEFAULT 1,
+            is_disposed BOOLEAN DEFAULT 0,
+            UNIQUE(warehouse_id, tool_id)
+        )
+        """)
+        print("✅ Created tool_inventory table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Table tool_inventory might already exist: {e}")
+
+    # Add tool-related columns to transfers table
+    try:
+        cursor.execute("ALTER TABLE transfers ADD COLUMN tool_id INTEGER REFERENCES tools(id)")
+        print("✅ Added tool_id column to transfers table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column tool_id might already exist: {e}")
+
+    try:
+        cursor.execute("ALTER TABLE transfers ADD COLUMN item_type VARCHAR DEFAULT 'drug'")
+        print("✅ Added item_type column to transfers table")
+    except sqlite3.OperationalError as e:
+        print(f"⚠️  Column item_type might already exist: {e}")
+
     conn.commit()
     conn.close()
     print("\n🎉 Migration completed successfully!")
     print(f"Database: {db_path}")
     
-if __name__ == "__main__":
-    migrate()
-
 if __name__ == "__main__":
     migrate()

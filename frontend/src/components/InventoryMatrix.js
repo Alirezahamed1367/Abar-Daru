@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Paper, Typography, TextField, MenuItem, Grid, Chip } from '@mui/material';
+import { Box, Paper, Typography, TextField, MenuItem, Grid, Chip, Button, Autocomplete } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { getWarehouses, getDrugs, getInventory } from '../utils/api';
 import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationUtils';
 import { useSettings } from '../utils/SettingsContext';
+import jsPDF from 'jspdf';
 
 function InventoryMatrix() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -138,6 +140,147 @@ function InventoryMatrix() {
     }
   ];
 
+  const handleExportPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape mode
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 10;
+    let y = margin;
+
+    // Title
+    doc.setFontSize(16);
+    doc.text('Matrix Inventory Report', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+
+    // Filter info
+    doc.setFontSize(10);
+    if (filterDrug) {
+      const drugName = drugs.find(d => d.id === filterDrug)?.name || '';
+      doc.text(`Drug: ${drugName}`, pageWidth - margin, y, { align: 'right' });
+      y += 7;
+    }
+    
+    doc.text(`Date: ${new Date().toLocaleDateString('fa-IR')}`, pageWidth - margin, y, { align: 'right' });
+    y += 10;
+
+    // Table
+    const dataForPDF = matrixData.filter(row => row.id !== 'TOTAL');
+    const totalRow = matrixData.find(row => row.id === 'TOTAL');
+
+    // Calculate column widths
+    const availableWidth = pageWidth - 2 * margin;
+    const drugColWidth = 60;
+    const numCols = warehouses.length + 1; // warehouses + total
+    const otherColWidth = (availableWidth - drugColWidth) / numCols;
+
+    // Header
+    doc.setFillColor(79, 70, 229); // Primary color
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    
+    let x = pageWidth - margin;
+    
+    // Total column header
+    doc.rect(x - otherColWidth, y, otherColWidth, 8, 'F');
+    doc.text('Total', x - otherColWidth / 2, y + 5.5, { align: 'center' });
+    x -= otherColWidth;
+    
+    // Warehouse columns headers
+    warehouses.slice().reverse().forEach(wh => {
+      doc.rect(x - otherColWidth, y, otherColWidth, 8, 'F');
+      doc.text(wh.name, x - otherColWidth / 2, y + 5.5, { align: 'center' });
+      x -= otherColWidth;
+    });
+    
+    // Drug name header
+    doc.rect(margin, y, drugColWidth, 8, 'F');
+    doc.text('Drug Name', margin + drugColWidth / 2, y + 5.5, { align: 'center' });
+    
+    y += 8;
+
+    // Data rows
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    
+    dataForPDF.forEach((row, index) => {
+      if (y > pageHeight - 30) {
+        doc.addPage();
+        y = margin;
+        
+        // Repeat header on new page
+        doc.setFillColor(79, 70, 229);
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        
+        x = pageWidth - margin;
+        doc.rect(x - otherColWidth, y, otherColWidth, 8, 'F');
+        doc.text('Total', x - otherColWidth / 2, y + 5.5, { align: 'center' });
+        x -= otherColWidth;
+        
+        warehouses.slice().reverse().forEach(wh => {
+          doc.rect(x - otherColWidth, y, otherColWidth, 8, 'F');
+          doc.text(wh.name, x - otherColWidth / 2, y + 5.5, { align: 'center' });
+          x -= otherColWidth;
+        });
+        
+        doc.rect(margin, y, drugColWidth, 8, 'F');
+        doc.text('Drug Name', margin + drugColWidth / 2, y + 5.5, { align: 'center' });
+        
+        y += 8;
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(9);
+      }
+
+      // Row background (alternating)
+      if (index % 2 === 0) {
+        doc.setFillColor(245, 245, 245);
+        doc.rect(margin, y, availableWidth, 7, 'F');
+      }
+
+      x = pageWidth - margin;
+      
+      // Total
+      doc.text(String(row.total || 0), x - otherColWidth / 2, y + 5, { align: 'center' });
+      x -= otherColWidth;
+      
+      // Warehouse quantities
+      warehouses.slice().reverse().forEach(wh => {
+        const qty = row[`wh_${wh.id}`] || 0;
+        doc.text(String(qty), x - otherColWidth / 2, y + 5, { align: 'center' });
+        x -= otherColWidth;
+      });
+      
+      // Drug name
+      doc.text(row.drug_name, margin + 2, y + 5);
+      
+      y += 7;
+    });
+
+    // Total row
+    if (totalRow) {
+      y += 2;
+      doc.setFillColor(79, 70, 229);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.rect(margin, y, availableWidth, 8, 'F');
+      
+      x = pageWidth - margin;
+      doc.text(String(totalRow.total || 0), x - otherColWidth / 2, y + 5.5, { align: 'center' });
+      x -= otherColWidth;
+      
+      warehouses.slice().reverse().forEach(wh => {
+        const qty = totalRow[`wh_${wh.id}`] || 0;
+        doc.text(String(qty), x - otherColWidth / 2, y + 5.5, { align: 'center' });
+        x -= otherColWidth;
+      });
+      
+      doc.text('Grand Total', margin + drugColWidth / 2, y + 5.5, { align: 'center' });
+    }
+
+    doc.save(`matrix-inventory-${new Date().toLocaleDateString('fa-IR')}.pdf`);
+  };
+
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
       <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
@@ -149,19 +292,36 @@ function InventoryMatrix() {
         </Box>
 
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              select
-              label="فیلتر بر اساس دارو"
+          <Grid item xs={12} md={6}>
+            <Autocomplete
+              options={drugs}
+              getOptionLabel={(option) => option.name}
+              value={drugs.find(d => d.id === filterDrug) || null}
+              onChange={(event, newValue) => {
+                setFilterDrug(newValue ? newValue.id : '');
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="فیلتر بر اساس دارو"
+                  placeholder="جستجو..."
+                />
+              )}
+              noOptionsText="داروی یافت نشد"
               fullWidth
-              value={filterDrug}
-              onChange={(e) => setFilterDrug(e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<PictureAsPdfIcon />}
+              onClick={handleExportPDF}
+              fullWidth
+              sx={{ height: 56 }}
             >
-              <MenuItem value="">همه داروها</MenuItem>
-              {drugs.map((d) => (
-                <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
-              ))}
-            </TextField>
+              دریافت PDF
+            </Button>
           </Grid>
         </Grid>
 

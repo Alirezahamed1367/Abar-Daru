@@ -49,3 +49,12 @@ export const getTransfers = () => axios.get(`${BASE_URL}/transfer/all`);
 export const createTransfer = (data) => axios.post(`${BASE_URL}/transfer`, data);
 export const confirmTransfer = (id, quantity_received) => axios.post(`${BASE_URL}/transfer/${id}/confirm`, null, { params: { quantity_received } });
 export const rejectTransfer = (id) => axios.post(`${BASE_URL}/transfer/${id}/reject`);
+
+// Tools API
+export const getTools = () => axios.get(`${BASE_URL}/tools`);
+export const addTool = (data) => axios.post(`${BASE_URL}/tools`, data);
+export const updateTool = (id, data) => axios.put(`${BASE_URL}/tools/${id}`, data);
+export const deleteTool = (id) => axios.delete(`${BASE_URL}/tools/${id}`);
+export const getToolInventory = () => axios.get(`${BASE_URL}/tool-inventory`);
+export const addToolInventory = (data) => axios.post(`${BASE_URL}/tool-inventory`, data);
+export const getToolInventoryReport = (params) => axios.get(`${BASE_URL}/tool-inventory/report`, { params });
