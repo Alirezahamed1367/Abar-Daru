@@ -194,6 +194,8 @@ function App() {
             <Route path="/mismatches" element={<MismatchPanel />} />
             <Route path="/drugs" element={<DrugManagement />} />
             <Route path="/tools" element={<ToolManagement />} />
+            <Route path="/tool-inventory" element={<ToolInventoryForm />} />
+            <Route path="/tool-transfer" element={<ToolTransferForm />} />
             <Route path="/tool-reports" element={<ToolReports />} />
             <Route path="/inventory-matrix" element={<InventoryMatrix />} />
             <Route path="/suppliers" element={<SupplierManagement />} />
