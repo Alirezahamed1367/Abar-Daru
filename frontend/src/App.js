@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import InventoryForm from './components/InventoryForm';
 import DrugManagement from './components/DrugManagement';
+import ToolManagement from './components/ToolManagement';
 import SupplierManagement from './components/SupplierManagement';
 import ConsumerManagement from './components/ConsumerManagement';
 import SettingsPanel from './components/SettingsPanel';
@@ -189,6 +190,7 @@ function App() {
             <Route path="/transfer-list" element={<TransferList />} />
             <Route path="/mismatches" element={<MismatchPanel />} />
             <Route path="/drugs" element={<DrugManagement />} />
+            <Route path="/tools" element={<ToolManagement />} />
             <Route path="/inventory-matrix" element={<InventoryMatrix />} />
             <Route path="/suppliers" element={<SupplierManagement />} />
             <Route path="/consumers" element={<ConsumerManagement />} />

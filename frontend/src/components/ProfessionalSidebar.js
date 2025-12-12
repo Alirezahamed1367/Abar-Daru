@@ -25,6 +25,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import LogoutIcon from '@mui/icons-material/Logout';
+import BuildIcon from '@mui/icons-material/Build';
 import { useNavigate } from 'react-router-dom';
 
 function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawerTransitionEnd, handleDrawerClose, drawerWidth, collapsed, setCollapsed, onLogout }) {
@@ -76,6 +77,14 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       submenu: [
         { title: 'لیست داروها', icon: <ListAltIcon />, path: '/drugs' },
         { title: 'موجودی انبار (ماتریسی)', icon: <InventoryIcon />, path: '/inventory-matrix' }
+      ]
+    },
+    {
+      title: 'مدیریت ابزارها',
+      icon: <BuildIcon />,
+      color: '#f57c00',
+      submenu: [
+        { title: 'لیست ابزارها', icon: <ListAltIcon />, path: '/tools' }
       ]
     },
     {
