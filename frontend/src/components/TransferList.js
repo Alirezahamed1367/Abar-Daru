@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Typography, Paper, Button, TextField, Dialog, DialogTitle, 
   DialogContent, DialogActions, Chip, IconButton, Tooltip, InputAdornment,
-  Grid, Card, CardContent, MenuItem
+  Grid, Card, CardContent, MenuItem, Tabs, Tab
 } from '@mui/material';
 import { DataGrid, faIR } from '@mui/x-data-grid';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -16,6 +16,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import PendingActionsIcon from '@mui/icons-material/PendingActions';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
+import BuildIcon from '@mui/icons-material/Build';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { getExpirationColor } from '../utils/expirationUtils';
@@ -27,6 +29,7 @@ import TransferDialog from './TransferDialog';
 function TransferList() {
   const { settings } = useSettings();
   const currentUser = useCurrentUser();
+  const [tabValue, setTabValue] = useState(0); // 0 = داروها, 1 = ابزارها
   const [transfers, setTransfers] = useState([]);
   const [filteredTransfers, setFilteredTransfers] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -38,6 +41,7 @@ function TransferList() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
+  const [tools, setTools] = useState([]);
   
   // States for edit dialog
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -50,7 +54,17 @@ function TransferList() {
   useEffect(() => {
     loadTransfers();
     loadEditDialogData();
+    loadTools();
   }, []);
+
+  const loadTools = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/tools`);
+      setTools(res.data);
+    } catch (err) {
+      console.error('Error loading tools:', err);
+    }
+  };
 
   const loadEditDialogData = async () => {
     try {
@@ -72,19 +86,42 @@ function TransferList() {
   useEffect(() => {
     let filtered = transfers;
     
+    // فیلتر بر اساس tab (داروها یا ابزارها)
+    if (tabValue === 0) {
+      // داروها: item_type === 'drug' یا null (برای سازگاری با داده‌های قدیمی)
+      filtered = filtered.filter(t => !t.item_type || t.item_type === 'drug');
+    } else {
+      // ابزارها: item_type === 'tool'
+      filtered = filtered.filter(t => t.item_type === 'tool');
+    }
+    
     // Apply search filter
     if (searchText.trim() !== '') {
       const lowercaseSearch = searchText.toLowerCase();
-      filtered = filtered.filter(transfer =>
-        transfer.drug?.name?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.source_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.destination_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.consumer?.name?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.status?.toLowerCase().includes(lowercaseSearch) ||
-        transfer.expire_date?.includes(lowercaseSearch) ||
-        transfer.quantity_sent?.toString().includes(lowercaseSearch) ||
-        transfer.quantity_received?.toString().includes(lowercaseSearch)
-      );
+      filtered = filtered.filter(transfer => {
+        if (tabValue === 0) {
+          // جستجو در داروها
+          return transfer.drug?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.source_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.destination_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.consumer?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.status?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.expire_date?.includes(lowercaseSearch) ||
+            transfer.quantity_sent?.toString().includes(lowercaseSearch) ||
+            transfer.quantity_received?.toString().includes(lowercaseSearch);
+        } else {
+          // جستجو در ابزارها
+          const tool = tools.find(t => t.id === transfer.tool_id);
+          return tool?.name?.toLowerCase().includes(lowercaseSearch) ||
+            tool?.serial_number?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.source_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.destination_warehouse?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.consumer?.name?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.status?.toLowerCase().includes(lowercaseSearch) ||
+            transfer.quantity_sent?.toString().includes(lowercaseSearch) ||
+            transfer.quantity_received?.toString().includes(lowercaseSearch);
+        }
+      });
     }
     
     // Apply status filter
@@ -98,7 +135,7 @@ function TransferList() {
     }
     
     setFilteredTransfers(filtered);
-  }, [searchText, statusFilter, typeFilter, transfers]);
+  }, [searchText, statusFilter, typeFilter, transfers, tabValue, tools]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -296,16 +333,37 @@ function TransferList() {
       }
     },
     {
-      field: 'drug',
-      headerName: 'دارو',
+      field: tabValue === 0 ? 'drug' : 'tool',
+      headerName: tabValue === 0 ? 'دارو' : 'ابزار',
       flex: 1,
       minWidth: 140,
-      valueGetter: (params) => params.row.drug?.name || '-'
+      renderCell: (params) => {
+        if (tabValue === 0) {
+          // نمایش دارو
+          return params.row.drug?.name || '-';
+        } else {
+          // نمایش ابزار با شماره سریال
+          const tool = tools.find(t => t.id === params.row.tool_id);
+          return (
+            <Box>
+              <Typography variant="body2" fontWeight="bold">
+                {tool?.name || '-'}
+              </Typography>
+              {tool?.serial_number && (
+                <Typography variant="caption" color="text.secondary">
+                  S/N: {tool.serial_number}
+                </Typography>
+              )}
+            </Box>
+          );
+        }
+      }
     },
     { 
       field: 'expire_date', 
       headerName: 'انقضا', 
       width: 130,
+      hide: tabValue === 1, // پنهان کردن برای ابزارها
       renderCell: (params) => {
         if (!params.value || params.value === 'null') {
           return <Chip label="ندارد" color="default" size="small" />;
@@ -453,7 +511,7 @@ function TransferList() {
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
       <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <LocalShippingIcon color="primary" sx={{ fontSize: 32 }} />
             <Typography variant="h5" fontWeight="bold" color="primary" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
@@ -476,6 +534,24 @@ function TransferList() {
               <RefreshIcon />
             </IconButton>
           </Tooltip>
+        </Box>
+
+        {/* Tabs for Drug/Tool */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} aria-label="drug and tool transfers">
+            <Tab 
+              icon={<LocalPharmacyIcon />} 
+              iconPosition="start" 
+              label="حواله‌های داروها" 
+              sx={{ fontWeight: 'bold' }}
+            />
+            <Tab 
+              icon={<BuildIcon />} 
+              iconPosition="start" 
+              label="حواله‌های ابزارها" 
+              sx={{ fontWeight: 'bold' }}
+            />
+          </Tabs>
         </Box>
 
         {message && (

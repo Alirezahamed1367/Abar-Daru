@@ -85,8 +85,7 @@ function ProfessionalSidebar({ user, mobileOpen, handleDrawerToggle, handleDrawe
       color: '#f57c00',
       submenu: [
         { title: 'لیست ابزارها', icon: <ListAltIcon />, path: '/tools' },
-        { title: 'رسید ابزار', icon: <ReceiptIcon />, path: '/tool-inventory' },
-        { title: 'حواله ابزار', icon: <SendIcon />, path: '/tool-transfer' }
+        { title: 'گزارش ابزارها', icon: <AssessmentIcon />, path: '/tool-reports' }
       ]
     },
     {

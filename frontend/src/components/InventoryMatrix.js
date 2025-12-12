@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Paper, Typography, TextField, MenuItem, Grid, Chip, Button, Autocomplete } from '@mui/material';
+import { Box, Paper, Typography, TextField, MenuItem, Grid, Chip, Button, Autocomplete, Tabs, Tab } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
+import BuildIcon from '@mui/icons-material/Build';
 import { getWarehouses, getDrugs, getInventory } from '../utils/api';
 import { getExpirationColor, getDaysUntilExpiration } from '../utils/expirationUtils';
 import { useSettings } from '../utils/SettingsContext';
@@ -10,14 +12,18 @@ import jsPDF from 'jspdf';
 
 function InventoryMatrix() {
   const { settings, loading: settingsLoading } = useSettings();
+  const [tabValue, setTabValue] = useState(0); // 0 = داروها, 1 = ابزارها
   const [warehouses, setWarehouses] = useState([]);
   const [drugs, setDrugs] = useState([]);
+  const [tools, setTools] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [toolInventory, setToolInventory] = useState([]);
   const [matrixData, setMatrixData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Filters
   const [filterDrug, setFilterDrug] = useState('');
+  const [filterTool, setFilterTool] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -26,14 +32,18 @@ function InventoryMatrix() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [whRes, drugRes, invRes] = await Promise.all([
+      const [whRes, drugRes, invRes, toolRes, toolInvRes] = await Promise.all([
         getWarehouses(),
         getDrugs(),
-        getInventory()
+        getInventory(),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/tools`).then(r => r.json()),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/tool-inventory`).then(r => r.json())
       ]);
       setWarehouses(whRes.data);
       setDrugs(drugRes.data);
       setInventory(invRes.data);
+      setTools(toolRes);
+      setToolInventory(toolInvRes);
     } catch (err) {
       console.error(err);
     } finally {
@@ -42,9 +52,10 @@ function InventoryMatrix() {
   };
 
   useEffect(() => {
-    if (drugs.length && warehouses.length) {
+    if (tabValue === 0 && drugs.length && warehouses.length) {
+      // ماتریس داروها
       let data = drugs.map(drug => {
-        const row = { id: drug.id, drug_name: drug.name };
+        const row = { id: drug.id, item_name: drug.name };
         let rowTotal = 0;
         
         // Find all inventory items for this drug
@@ -78,7 +89,43 @@ function InventoryMatrix() {
       }
 
       // Calculate column totals
-      const totalRow = { id: 'TOTAL', drug_name: 'مجموع کل' };
+      const totalRow = { id: 'TOTAL', item_name: 'مجموع کل' };
+      let grandTotal = 0;
+      warehouses.forEach(wh => {
+        const colTotal = data.reduce((sum, row) => sum + (row[`wh_${wh.id}`] || 0), 0);
+        totalRow[`wh_${wh.id}`] = colTotal;
+        grandTotal += colTotal;
+      });
+      totalRow['total'] = grandTotal;
+
+      setMatrixData([...data, totalRow]);
+    } else if (tabValue === 1 && tools.length && warehouses.length) {
+      // ماتریس ابزارها
+      let data = tools.map(tool => {
+        const row = { id: tool.id, item_name: `${tool.name} (S/N: ${tool.serial_number})` };
+        let rowTotal = 0;
+        
+        // Find all inventory items for this tool
+        const currentToolInventory = toolInventory.filter(inv => inv.tool_id === tool.id);
+
+        warehouses.forEach(wh => {
+          // Sum quantity for this tool in this warehouse
+          const totalQty = currentToolInventory
+            .filter(inv => inv.warehouse_id === wh.id)
+            .reduce((sum, inv) => sum + inv.quantity, 0);
+          row[`wh_${wh.id}`] = totalQty;
+          rowTotal += totalQty;
+        });
+        row['total'] = rowTotal;
+        return row;
+      });
+
+      if (filterTool) {
+        data = data.filter(d => d.id === filterTool);
+      }
+
+      // Calculate column totals
+      const totalRow = { id: 'TOTAL', item_name: 'مجموع کل' };
       let grandTotal = 0;
       warehouses.forEach(wh => {
         const colTotal = data.reduce((sum, row) => sum + (row[`wh_${wh.id}`] || 0), 0);
@@ -89,18 +136,18 @@ function InventoryMatrix() {
 
       setMatrixData([...data, totalRow]);
     }
-  }, [drugs, warehouses, inventory, filterDrug]);
+  }, [drugs, tools, warehouses, inventory, toolInventory, filterDrug, filterTool, tabValue]);
 
   const columns = [
     { 
-        field: 'drug_name', 
-        headerName: 'نام دارو', 
+        field: 'item_name', 
+        headerName: tabValue === 0 ? 'نام دارو' : 'نام ابزار', 
         flex: 1,
         minWidth: 200,
         resizable: true,
         pinned: 'right',
         renderCell: (params) => {
-            const expireDate = params.row.min_expire;
+            const expireDate = tabValue === 0 ? params.row.min_expire : null;
             const color = expireDate ? getExpirationColor(expireDate, settings.exp_warning_days) : 'inherit';
             return (
                 <Typography 
@@ -252,7 +299,7 @@ function InventoryMatrix() {
       });
       
       // Drug name
-      doc.text(row.drug_name, margin + 2, y + 5);
+      doc.text(row.item_name, margin + 2, y + 5);
       
       y += 7;
     });
@@ -284,32 +331,70 @@ function InventoryMatrix() {
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
       <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 } }}>
-        <Box display="flex" alignItems="center" gap={1} mb={3} flexWrap="wrap">
+        <Box display="flex" alignItems="center" gap={1} mb={2} flexWrap="wrap">
           <InventoryIcon color="primary" sx={{ fontSize: 32 }} />
           <Typography variant="h5" fontWeight="bold" color="primary" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
             موجودی تجمیعی انبارها (ماتریسی)
           </Typography>
         </Box>
 
+        {/* Tabs for Drug/Tool */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={(e, newValue) => { setTabValue(newValue); setFilterDrug(''); setFilterTool(''); }} aria-label="drug and tool inventory">
+            <Tab 
+              icon={<LocalPharmacyIcon />} 
+              iconPosition="start" 
+              label="موجودی داروها" 
+              sx={{ fontWeight: 'bold' }}
+            />
+            <Tab 
+              icon={<BuildIcon />} 
+              iconPosition="start" 
+              label="موجودی ابزارها" 
+              sx={{ fontWeight: 'bold' }}
+            />
+          </Tabs>
+        </Box>
+
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} md={6}>
-            <Autocomplete
-              options={drugs}
-              getOptionLabel={(option) => option.name}
-              value={drugs.find(d => d.id === filterDrug) || null}
-              onChange={(event, newValue) => {
-                setFilterDrug(newValue ? newValue.id : '');
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="فیلتر بر اساس دارو"
-                  placeholder="جستجو..."
-                />
-              )}
-              noOptionsText="داروی یافت نشد"
-              fullWidth
-            />
+            {tabValue === 0 ? (
+              <Autocomplete
+                options={drugs}
+                getOptionLabel={(option) => option.name}
+                value={drugs.find(d => d.id === filterDrug) || null}
+                onChange={(event, newValue) => {
+                  setFilterDrug(newValue ? newValue.id : '');
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="فیلتر بر اساس دارو"
+                    placeholder="جستجو..."
+                  />
+                )}
+                noOptionsText="داروی یافت نشد"
+                fullWidth
+              />
+            ) : (
+              <Autocomplete
+                options={tools}
+                getOptionLabel={(option) => `${option.name} (S/N: ${option.serial_number})`}
+                value={tools.find(t => t.id === filterTool) || null}
+                onChange={(event, newValue) => {
+                  setFilterTool(newValue ? newValue.id : '');
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="فیلتر بر اساس ابزار"
+                    placeholder="جستجو..."
+                  />
+                )}
+                noOptionsText="ابزاری یافت نشد"
+                fullWidth
+              />
+            )}
           </Grid>
           <Grid item xs={12} md={6}>
             <Button
